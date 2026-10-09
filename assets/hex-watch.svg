@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Hex Watch Cipher</title>
+  <defs>
+    <linearGradient id="violet" x1="10" y1="8" x2="53" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c19aff"/>
+      <stop offset=".52" stop-color="#914cf2"/>
+      <stop offset="1" stop-color="#672bc0"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="8" y1="4" x2="57" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#171020"/>
+      <stop offset="1" stop-color="#0b0811"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#tile)" stroke="#39264d" stroke-width="1.5"/>
+  <path d="M32 8 52.8 20v24L32 56 11.2 44V20L32 8Z" fill="none" stroke="url(#violet)" stroke-linejoin="round" stroke-width="4.5"/>
+  <path d="M23 23v18m18-18v18M23 32h18" fill="none" stroke="url(#violet)" stroke-linecap="square" stroke-width="5.5"/>
+</svg>

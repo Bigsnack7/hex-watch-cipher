@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self'; font-src 'self'; media-src 'none'; connect-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="application-name" content="Hex Watch Cipher">
+<meta property="og:title" content="Hex Watch Cipher">
+<meta property="og:image" content="assets/hex-watch-project.png">
+<link rel="icon" type="image/svg+xml" href="assets/hex-watch.svg" sizes="any">
+<link rel="icon" type="image/png" sizes="512x512" href="assets/hex-watch-project.png">
+<link rel="apple-touch-icon" sizes="512x512" href="assets/hex-watch-project.png">
+<title>Hex Watch Cipher</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main class="card" id="card">
+  <div class="top">
+    <img class="brandmark" src="assets/hex-watch.svg" alt="">
+    <h1>Hex Watch Cipher <span>SECURE WORKSPACE</span></h1>
+    <span class="light" id="light" aria-hidden="true" title="Narration status"></span>
+    <div class="tools">
+      <button id="voxB" aria-label="Toggle narration" aria-pressed="false" title="Toggle narration">Narration: Off</button>
+      <button id="sfxB" aria-label="Toggle sound effects" aria-pressed="false" title="Toggle sound effects">Sounds: Off</button>
+    </div>
+  </div>
+  <p class="audio-status" id="audioStatus" role="status" aria-live="polite"></p>
+  <p class="sub">Protect messages with modern encryption. <strong>Encryption and decryption run locally in your browser.</strong></p>
+  <div class="workspace">
+    <section class="panel" aria-labelledby="compose-title">
+      <div class="panel-heading">
+        <div><h2 id="compose-title">Compose a secure message</h2><p>Choose a cipher, set your access key, then encrypt or decrypt.</p></div>
+        <span class="step" aria-hidden="true">01</span>
+      </div>
+      <div class="field">
+        <label for="mode">Encryption method</label>
+        <select id="mode">
+          <option value="aes">AES-256-GCM · Recommended</option>
+          <option value="cbc">AES-256-CBC + HMAC-SHA-256 · Compatibility</option>
+          <option value="rsa">RSA-OAEP-2048 + AES-256-GCM · RSA1 compatible</option>
+          <option value="hybrid">Hybrid AES-256-GCM + RSA-OAEP · Recommended</option>
+          <option value="legacy">Grumpy v2 · Legacy encryption/decryption (insecure)</option>
+        </select>
+        <span class="field-hint" id="modeHint">Authenticated encryption with a random salt and IV for each message.</span>
+      </div>
+      <div class="field" id="passphraseField">
+        <label for="key">Access key</label>
+        <div class="row">
+          <input type="password" id="key" maxlength="4096" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Enter your access key">
+          <button class="sq" id="eye" aria-label="Show access key" aria-pressed="false" title="Show access key">Show</button>
+        </div>
+        <span class="field-hint" id="keyHint">Choose a long, unique passphrase; a randomly generated one is preferable to a short or predictable password. AES/CBC normalize passphrases with Unicode NFKC before deriving keys. At least 10 characters; maximum 4,096 UTF-8 bytes.</span>
+      </div>
+      <div class="field" id="rsaKeys" hidden>
+        <p class="field-hint" id="rsaKeySummary">Created: Not recorded · No private key loaded</p>
+        <label for="rsaKeyMode">Private-key handling for generated keys</label>
+        <select id="rsaKeyMode">
+          <option value="nonextractable" selected>Browser-held, non-extractable · Recommended</option>
+          <option value="exportable">Exportable PEM · For deliberate backup</option>
+        </select>
+        <p class="field-hint" id="rsaKeyModeHint">The private key stays as a non-extractable CryptoKey in this page's memory. It is cleared on lock, page close, or reload and cannot be backed up by this app. If lost, messages encrypted to this key cannot be recovered.</p>
+        <p class="info warn" id="rsaBackupReminder" hidden>Backup reminder: store this exportable private key securely before relying on it. Anyone who obtains it can decrypt messages addressed to this key.</p>
+        <label for="rsaPublic">RSA public key (SPKI PEM)</label>
+        <textarea id="rsaPublic" rows="5" maxlength="20000" spellcheck="false" autocomplete="off" placeholder="Paste a recipient's RSA public key, or generate a key pair below"></textarea>
+        <p class="field-hint fingerprint" id="fingerprintStatus" aria-live="polite">SHA-256 public-key fingerprint: <code id="rsaFingerprint">Not calculated</code></p>
+        <span class="field-hint">Compare this fingerprint with the recipient through a separate trusted channel. A matching fingerprint helps identify the same key; it does not prove who owns it.</span>
+        <div class="key-action">
+          <button type="button" id="generateRsa">Generate RSA-2048 key pair</button>
+          <button type="button" id="copyPublic">Copy public key</button>
+        </div>
+        <div class="key-pair-grid key-pair-nested">
+          <div>
+            <label for="rsaPrivate">Optional private-key PEM import / export</label>
+            <textarea id="rsaPrivate" rows="5" maxlength="20000" spellcheck="false" autocomplete="off" placeholder="Paste a backed-up PKCS#8 private key to import it. Newly generated non-extractable keys are not shown here."></textarea>
+            <div class="key-action"><button type="button" id="copyPrivate" hidden>Copy exportable private key</button></div>
+          </div>
+        </div>
+        <span class="field-hint">Encrypt with the recipient's public key; decrypt with the matching private key. Only share public keys.</span>
+      </div>
+      <div class="field">
+        <label for="inp">Message or encrypted token</label>
+        <textarea id="inp" maxlength="140000" spellcheck="false" placeholder="Write a message to encrypt, or paste a CT1. token to decrypt…"></textarea>
+        <span class="field-hint">Messages are limited to 100,000 UTF-8 bytes; encrypted tokens to 140,000 characters. Keyboard shortcut: Ctrl/⌘ + Enter to encrypt; add Shift to decrypt.</span>
+      </div>
+      <div class="actions">
+        <button id="encB">Encrypt message</button>
+        <button id="decB">Decrypt message</button>
+        <button id="clrB" class="clr">Clear</button>
+        <p id="operationStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+      <section class="file-tools" aria-labelledby="file-title">
+        <div class="panel-heading">
+          <div><h2 id="file-title">Encrypt a file</h2><p>Files always use AES-256-GCM, regardless of the selected text cipher.</p></div>
+        </div>
+        <label for="fileInput">File to encrypt or decrypt (up to 1 GiB)</label>
+        <input id="fileInput" type="file" aria-describedby="fileHint">
+        <span class="field-hint" id="fileHint">Maximum 1 GiB. Files use chunked AES-256-GCM and the access key above (at least 10 characters). New encrypted files use the binary HWF2 format; earlier HWF1 files up to 1 MiB remain decryptable. Original filenames and types are not stored. Large files use a Save File picker where supported; other browsers may need substantial memory to prepare the download.</span>
+        <div class="key-action">
+          <button type="button" id="fileEncrypt">Encrypt and download file</button>
+          <button type="button" id="fileDecrypt">Decrypt and download file</button>
+        </div>
+        <p id="fileStatus" class="field-hint" role="status" aria-live="polite" aria-atomic="true"></p>
+      </section>
+    </section>
+    <aside class="right-column">
+      <section class="outbox" aria-label="Output">
+            <div class="panel-heading">
+          <div><h2>Message output</h2><p>Encrypted text or decrypted message appears here.</p></div>
+          <span class="step" aria-hidden="true">02</span>
+        </div>
+        <div class="oh"><span>RESULT</span><div class="output-actions"><button id="downloadToken" disabled>Download .txt</button><button id="copy">Copy output</button></div></div>
+        <div class="otext" id="out" role="status" aria-live="polite" aria-atomic="true">Your result will appear here.</div>
+        <div class="migration" id="legacyMigration" hidden>
+          <p id="migrationStatus" role="status" aria-live="polite" aria-atomic="true" hidden></p>
+          <button type="button" id="migrateLegacy">Prepare AES-256-GCM migration</button>
+        </div>
+      </section>
+      <p class="info" id="status"></p>
+      <p class="privacy-note"><strong>Local encryption, no application backend required.</strong><br>Messages, files, and keys are processed in your browser using the Web Crypto API. This application does not intentionally transmit message contents, file contents, or cryptographic keys to a server. Your security also depends on the integrity of the application code, your browser, and your device. A compromised computer, malicious browser extension, memory-reading malware, someone using an unlocked device, or altered code delivered by a compromised hosting environment may expose sensitive data. Store access keys and private-key backups securely. Password-based encryption cannot protect weak passphrases. Token size and format remain visible. File encryption supports files up to 1 GiB using authenticated chunks; large-file saving uses browser capabilities and may require substantial memory if streamed saving is unavailable. Original filenames and types are not stored. Non-extractable RSA private keys are memory-only and cannot be recovered if lost; exportable keys need a secure user-managed backup. This app never saves private keys to localStorage. The RSA public key is public and remains in the workspace after an inactivity lock; private keys, access keys, messages, and results are cleared. The privacy lock has no password and is not an authentication boundary. ChaCha20-Poly1305 is not offered because browsers do not provide it through native Web Crypto; this app avoids unreviewed custom cryptography.</p>
+      <div class="narr" id="narr"><b>Narration</b><i id="ntext">Off</i></div>
+    </aside>
+  </div>
+  <footer class="footer">AES-GCM · AES-CBC + HMAC · RSA-OAEP hybrid encryption · PBKDF2-SHA-256. Keep passphrases and any exported RSA private-key backups safe; this app has no recovery service.</footer>
+</main>
+<section class="lock-screen" id="lockScreen" role="dialog" aria-modal="true" aria-labelledby="lockTitle" hidden>
+  <div class="lock-panel">
+    <img class="lock-mark" src="assets/hex-watch.svg" alt="">
+    <p class="lock-eyebrow">HEX WATCH CIPHER</p>
+    <h2 id="lockTitle">Workspace privacy lock</h2>
+    <p id="lockMessage" role="alert" aria-live="assertive">The workspace was locked after 5 minutes of inactivity. Sensitive fields and results have been cleared. Your RSA public key is retained; your private key is not.</p>
+    <button type="button" id="resumeB">Continue with a fresh workspace</button>
+    <p class="lock-disclaimer">This lock protects against casual viewing only. It does not require a password or authenticate a user.</p>
+  </div>
+</section>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
