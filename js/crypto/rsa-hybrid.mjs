@@ -1,5 +1,5 @@
 import {
-  MAX_AES_CIPHERTEXT_BYTES, MAX_RSA_WRAPPED_BYTES, RSA_TAG,
+  MAX_AES_CIPHERTEXT_BYTES, MAX_RSA_WRAPPED_BYTES, RSA_DIRECT_TAG, RSA_TAG,
   assertMessageSize, b64, concat, decodeToken, decoder, encoder, requireCrypto, subtle
 } from './shared.mjs';
 import { readPem, writePem } from './pem.mjs';
@@ -24,10 +24,11 @@ async function importRsaKey(text, format, label, usage, extractable = false) {
   return key;
 }
 
-export async function generateRsaKeyPair({ exportable = false } = {}) {
+export async function generateRsaKeyPair({ exportable = false, modulusLength = 2048 } = {}) {
   requireCrypto();
+  if (![2048, 3072, 4096].includes(modulusLength)) throw new Error('keysize');
   const pair = await subtle.generateKey(
-    { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    { name: 'RSA-OAEP', modulusLength, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
     exportable,
     ['encrypt', 'decrypt']
   );
@@ -47,6 +48,42 @@ export async function fingerprintRsaPublicKey(pem) {
   const digest = new Uint8Array(await subtle.digest('SHA-256', canonicalSpki));
   const hex = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
   return hex.match(/.{1,4}/g).join(' ');
+}
+
+function rsaOaepMaxPlaintextBytes(key) {
+  if (!key || key.algorithm?.name !== 'RSA-OAEP' || key.algorithm.hash?.name !== 'SHA-256') {
+    throw new Error('keyformat');
+  }
+  return key.algorithm.modulusLength / 8 - 2 * 32 - 2;
+}
+
+function validateRsaPrivateKey(key) {
+  rsaOaepMaxPlaintextBytes(key);
+  if (key.type !== 'private' || key.algorithm.modulusLength < 2048 ||
+      key.algorithm.modulusLength > 8192 || !key.usages.includes('decrypt')) {
+    throw new Error(key.algorithm.modulusLength < 2048 ? 'keyweak' : 'keyformat');
+  }
+  return key;
+}
+
+export async function encryptRsaDirect(text, pem) {
+  requireCrypto();
+  const publicKey = await importRsaKey(pem, 'spki', 'PUBLIC KEY', 'encrypt');
+  const plaintext = encoder.encode(text);
+  if (plaintext.length > rsaOaepMaxPlaintextBytes(publicKey)) throw new Error('rsasizelimit');
+  const ciphertext = new Uint8Array(await subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, plaintext));
+  if (ciphertext.length > MAX_RSA_WRAPPED_BYTES) throw new Error('keylarge');
+  return RSA_DIRECT_TAG + b64(ciphertext);
+}
+
+export async function decryptRsaDirect(token, pem) {
+  requireCrypto();
+  const ciphertext = decodeToken(token, RSA_DIRECT_TAG, MAX_RSA_WRAPPED_BYTES);
+  const privateKey = validateRsaPrivateKey(
+    typeof pem === 'string' ? await importRsaKey(pem, 'pkcs8', 'PRIVATE KEY', 'decrypt') : pem
+  );
+  if (ciphertext.length !== privateKey.algorithm.modulusLength / 8) throw new Error('format');
+  return decoder.decode(await subtle.decrypt({ name: 'RSA-OAEP' }, privateKey, ciphertext));
 }
 
 export async function encryptRsaHybrid(text, pem) {
@@ -76,12 +113,9 @@ export async function decryptRsaHybrid(token, pem) {
   if (wrappedLength < 256 || wrappedLength > MAX_RSA_WRAPPED_BYTES || raw.length < ivOffset + 12 + 16) {
     throw new Error('format');
   }
-  const privateKey = typeof pem === 'string' ? await importRsaKey(pem, 'pkcs8', 'PRIVATE KEY', 'decrypt') : pem;
-  if (!privateKey || privateKey.type !== 'private' || privateKey.algorithm?.name !== 'RSA-OAEP' ||
-      privateKey.algorithm.modulusLength < 2048 || privateKey.algorithm.modulusLength > 8192 ||
-      !privateKey.usages.includes('decrypt')) {
-    throw new Error('keyformat');
-  }
+  const privateKey = validateRsaPrivateKey(
+    typeof pem === 'string' ? await importRsaKey(pem, 'pkcs8', 'PRIVATE KEY', 'decrypt') : pem
+  );
   const rawKey = await subtle.decrypt({ name: 'RSA-OAEP' }, privateKey, raw.slice(2, ivOffset));
   const aesKey = await subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['decrypt']);
   const plaintext = decoder.decode(await subtle.decrypt(

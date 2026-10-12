@@ -21,6 +21,16 @@
     <h1>Hex Watch Cipher <span>SECURE WORKSPACE</span></h1>
     <span class="light" id="light" aria-hidden="true" title="Narration status"></span>
     <div class="tools">
+      <label class="sr-only" for="narrLanguage">Narration language</label>
+      <select id="narrLanguage" aria-label="Narration language">
+        <option value="en">Narration: English</option>
+        <option value="yo">Narration: Yoruba</option>
+        <option value="ig">Narration: Igbo</option>
+        <option value="ha">Narration: Hausa</option>
+        <option value="pcm">Narration: Nigerian Pidgin</option>
+        <option value="es">Narration: Spanish</option>
+        <option value="fr">Narration: French</option>
+      </select>
       <button id="voxB" aria-label="Toggle narration" aria-pressed="false" title="Toggle narration">Narration: Off</button>
       <button id="sfxB" aria-label="Toggle sound effects" aria-pressed="false" title="Toggle sound effects">Sounds: Off</button>
     </div>
@@ -36,13 +46,23 @@
       <div class="field">
         <label for="mode">Encryption method</label>
         <select id="mode">
-          <option value="aes">AES-256-GCM · Recommended</option>
-          <option value="cbc">AES-256-CBC + HMAC-SHA-256 · Compatibility</option>
-          <option value="rsa">RSA-OAEP-2048 + AES-256-GCM · RSA1 compatible</option>
-          <option value="hybrid">Hybrid AES-256-GCM + RSA-OAEP · Recommended</option>
-          <option value="legacy">Grumpy v2 · Legacy encryption/decryption (insecure)</option>
+          <option value="aes">AES-GCM · Password-based (Recommended)</option>
+          <option value="cbc">AES-CBC + HMAC · Compatibility</option>
+          <option value="rsa-direct">RSA · Short messages only</option>
+          <option value="rsa">RSA Hybrid · RSA1-compatible</option>
+          <option value="hybrid">RSA Hybrid · Recommended public-key method</option>
+          <option value="legacy">Grumpy v2 · Legacy (Insecure)</option>
         </select>
         <span class="field-hint" id="modeHint">Authenticated encryption with a random salt and IV for each message.</span>
+      </div>
+      <div class="field" id="aesKeySizeField">
+        <label for="aesKeySize">AES-GCM key size</label>
+        <select id="aesKeySize">
+          <option value="128">128 bits · 16-byte key</option>
+          <option value="192">192 bits · 24-byte key</option>
+          <option value="256" selected>256 bits · 32-byte key · Recommended</option>
+        </select>
+        <span class="field-hint">This selects the derived AES key size, not the number of characters in your passphrase. Keep using a long, unique passphrase; Unicode characters do not equal bytes. The encrypted token records its key size and decrypts automatically.</span>
       </div>
       <div class="field" id="passphraseField">
         <label for="key">Access key</label>
@@ -60,13 +80,20 @@
           <option value="exportable">Exportable PEM · For deliberate backup</option>
         </select>
         <p class="field-hint" id="rsaKeyModeHint">The private key stays as a non-extractable CryptoKey in this page's memory. It is cleared on lock, page close, or reload and cannot be backed up by this app. If lost, messages encrypted to this key cannot be recovered.</p>
+        <label for="rsaKeySize">RSA key size for generated keys</label>
+        <select id="rsaKeySize">
+          <option value="2048" selected>2048 bits · Recommended</option>
+          <option value="3072">3072 bits</option>
+          <option value="4096">4096 bits</option>
+        </select>
+        <span class="field-hint" id="rsaKeySizeHint">This applies only to keys generated here. Pasted or imported keys keep their own size. Keys smaller than 2048 bits are not supported.</span>
         <p class="info warn" id="rsaBackupReminder" hidden>Backup reminder: store this exportable private key securely before relying on it. Anyone who obtains it can decrypt messages addressed to this key.</p>
         <label for="rsaPublic">RSA public key (SPKI PEM)</label>
         <textarea id="rsaPublic" rows="5" maxlength="20000" spellcheck="false" autocomplete="off" placeholder="Paste a recipient's RSA public key, or generate a key pair below"></textarea>
         <p class="field-hint fingerprint" id="fingerprintStatus" aria-live="polite">SHA-256 public-key fingerprint: <code id="rsaFingerprint">Not calculated</code></p>
         <span class="field-hint">Compare this fingerprint with the recipient through a separate trusted channel. A matching fingerprint helps identify the same key; it does not prove who owns it.</span>
         <div class="key-action">
-          <button type="button" id="generateRsa">Generate RSA-2048 key pair</button>
+          <button type="button" id="generateRsa">Generate selected-size RSA key pair</button>
           <button type="button" id="copyPublic">Copy public key</button>
         </div>
         <div class="key-pair-grid key-pair-nested">

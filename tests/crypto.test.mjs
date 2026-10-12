@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AES_TAG, CBC_TAG, RSA_TAG, MAX_MESSAGE_BYTES, MAX_TOKEN_CHARS, KDF_ITERATIONS,
+  AES_TAG, LEGACY_AES_TAG, AES_KEY_SIZES, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG,
+  MAX_MESSAGE_BYTES, MAX_TOKEN_CHARS, KDF_ITERATIONS,
   encryptAesGcm, decryptAesGcm, encryptCbcHmac, decryptCbcHmac,
-  encryptRsaHybrid, decryptRsaHybrid, generateRsaKeyPair, fingerprintRsaPublicKey,
+  encryptRsaHybrid, decryptRsaHybrid, encryptRsaDirect, decryptRsaDirect,
+  generateRsaKeyPair, fingerprintRsaPublicKey,
   encryptGrumpyV2, decryptGrumpyV2,
   FILE_TAG, LEGACY_MAX_FILE_BYTES, LEGACY_MAX_FILE_TOKEN_CHARS, MAX_FILE_BYTES,
   FILE_CHUNK_BYTES, MAX_ENCRYPTED_FILE_BYTES, encryptFileBytes, decryptFileToken,
@@ -33,11 +35,27 @@ test('AES-GCM round-trips empty and Unicode messages and rejects tampering/wrong
 test('AES-GCM rejects malformed and truncated ciphertext without returning plaintext', async () => {
   const token = await encryptAesGcm('Do not return unauthenticated plaintext.', password);
   const payload = Buffer.from(token.slice(AES_TAG.length), 'base64url');
-  await assert.rejects(decryptAesGcm('CT1.not*base64', password), error => error.message === 'format');
-  for (const length of [0, 27, 43, payload.length - 1]) {
+  await assert.rejects(decryptAesGcm('CT2.not*base64', password), error => error.message === 'format');
+  for (const length of [0, 1, 28, 44, payload.length - 1]) {
     const truncated = AES_TAG + payload.subarray(0, length).toString('base64url');
     await assert.rejects(decryptAesGcm(truncated, password), `truncation to ${length} bytes must fail`);
   }
+  await assert.rejects(decryptAesGcm('CT1.not*base64', password), error => error.message === 'format');
+});
+
+test('AES-GCM supports 128-, 192-, and 256-bit derived keys recorded in CT2 tokens', async () => {
+  assert.deepEqual(AES_KEY_SIZES, [128, 192, 256]);
+  for (const keyBits of AES_KEY_SIZES) {
+    const message = `AES-${keyBits} round trip`;
+    const token = await encryptAesGcm(message, password, keyBits);
+    assert.ok(token.startsWith('CT2.'));
+    const payload = Buffer.from(token.slice(AES_TAG.length), 'base64url');
+    assert.equal(payload[0], keyBits / 8);
+    assert.equal(await decryptAesGcm(token, password), message);
+  }
+  const token = await encryptAesGcm('Key size is authenticated.', password, 256);
+  await assert.rejects(decryptAesGcm(tamper(token, AES_TAG, 0), password));
+  await assert.rejects(encryptAesGcm('Invalid key size', password, 64), error => error.message === 'aeskeysize');
 });
 
 test('CBC-HMAC round-trips empty and Unicode messages and authenticates before decrypting', async () => {
@@ -93,7 +111,31 @@ test('AES-GCM and CBC-HMAC normalize equivalent Unicode passphrases with NFKC', 
   assert.equal(await decryptCbcHmac(cbcToken, decomposed), 'normalized CBC');
 });
 
-test('AES-GCM rejects authenticated plaintext that is not valid UTF-8', async () => {
+test('AES-GCM keeps decrypting legacy CT1 tokens and rejects authenticated invalid UTF-8', async () => {
+  const legacySalt = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  const legacyIv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const legacyBaseKey = await globalThis.crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password.normalize('NFKC')),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+  const legacyAesKey = await globalThis.crypto.subtle.deriveKey(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: legacySalt, iterations: KDF_ITERATIONS },
+    legacyBaseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt']
+  );
+  const legacyCiphertext = new Uint8Array(await globalThis.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: legacyIv, additionalData: new TextEncoder().encode('CT1') },
+    legacyAesKey,
+    new TextEncoder().encode('Legacy CT1 message')
+  ));
+  const legacyToken = LEGACY_AES_TAG + Buffer.concat([legacySalt, legacyIv, legacyCiphertext]).toString('base64url');
+  assert.equal(await decryptAesGcm(legacyToken, password), 'Legacy CT1 message');
+
   const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
   const baseKey = await globalThis.crypto.subtle.importKey(
@@ -111,11 +153,11 @@ test('AES-GCM rejects authenticated plaintext that is not valid UTF-8', async ()
     ['encrypt']
   );
   const ciphertext = new Uint8Array(await globalThis.crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('CT1') },
+    { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('CT2:256') },
     aesKey,
     new Uint8Array([0xff])
   ));
-  const token = AES_TAG + Buffer.concat([salt, iv, ciphertext]).toString('base64url');
+  const token = AES_TAG + Buffer.concat([Buffer.from([32]), salt, iv, ciphertext]).toString('base64url');
   await assert.rejects(decryptAesGcm(token, password), TypeError);
 });
 
@@ -138,6 +180,43 @@ test('RSA-OAEP hybrid encryption round-trips empty and Unicode messages and reje
     await assert.rejects(decryptRsaHybrid(tamper(token, RSA_TAG, bytes.length - 1), pair.privateKey));
     await assert.rejects(decryptRsaHybrid(token, otherPair.privateKey));
   }
+});
+
+test('direct RSA-OAEP encrypts only short messages and round-trips with the matching private key', async () => {
+  const pair = await generateRsaKeyPair();
+  for (const message of ['', 'Short RSA 🔐']) {
+    const token = await encryptRsaDirect(message, pair.publicKey);
+    assert.ok(token.startsWith(RSA_DIRECT_TAG));
+    assert.equal(await decryptRsaDirect(token, pair.privateKey), message);
+  }
+
+  const boundaryMessage = 'x'.repeat(190);
+  const boundaryToken = await encryptRsaDirect(boundaryMessage, pair.publicKey);
+  assert.equal(await decryptRsaDirect(boundaryToken, pair.privateKey), boundaryMessage);
+  const multibyteBoundary = '🔐'.repeat(47);
+  assert.equal(new TextEncoder().encode(multibyteBoundary).length, 188);
+  const multibyteToken = await encryptRsaDirect(multibyteBoundary, pair.publicKey);
+  assert.equal(await decryptRsaDirect(multibyteToken, pair.privateKey), multibyteBoundary);
+  await assert.rejects(
+    encryptRsaDirect(`${multibyteBoundary}🔐`, pair.publicKey),
+    error => error.message === 'rsasizelimit'
+  );
+
+  const otherPair = await generateRsaKeyPair();
+  await assert.rejects(decryptRsaDirect(boundaryToken, otherPair.privateKey));
+  await assert.rejects(decryptRsaDirect(tamper(boundaryToken, RSA_DIRECT_TAG, 0), pair.privateKey));
+});
+
+test('direct RSA-OAEP rejects malformed, truncated, and oversized payloads', async () => {
+  const pair = await generateRsaKeyPair();
+  const token = await encryptRsaDirect('Short direct RSA message', pair.publicKey);
+  await assert.rejects(decryptRsaDirect('RSA2.not*base64', pair.privateKey), error => error.message === 'format');
+  await assert.rejects(decryptRsaDirect(
+    RSA_DIRECT_TAG + Buffer.from(token.slice(RSA_DIRECT_TAG.length), 'base64url').subarray(0, 255).toString('base64url'),
+    pair.privateKey
+  ), error => error.message === 'format');
+  await assert.rejects(decryptRsaDirect(`${RSA_DIRECT_TAG}${'A'.repeat(1400)}`, pair.privateKey),
+    error => error.message === 'toolarge');
 });
 
 test('RSA hybrid rejects malformed and truncated tokens without returning plaintext', async () => {
@@ -165,6 +244,18 @@ test('RSA key generation defaults to non-extractable and supports deliberate exp
   assert.match(exportablePair.privatePem, /BEGIN PRIVATE KEY/);
   const backedUpToken = await encryptRsaHybrid('imported backup', exportablePair.publicKey);
   assert.equal(await decryptRsaHybrid(backedUpToken, exportablePair.privatePem), 'imported backup');
+});
+
+test('RSA key generation supports the selectable secure key sizes only', async () => {
+  for (const modulusLength of [2048, 3072, 4096]) {
+    const pair = await generateRsaKeyPair({ modulusLength });
+    assert.equal(pair.privateKey.algorithm.modulusLength, modulusLength);
+    assert.equal(pair.publicKey.includes('BEGIN PUBLIC KEY'), true);
+  }
+  await assert.rejects(
+    generateRsaKeyPair({ modulusLength: 1024 }),
+    error => error.message === 'keysize'
+  );
 });
 
 test('RSA import rejects malformed PEM and keys below the supported minimum', async () => {

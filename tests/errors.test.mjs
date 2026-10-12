@@ -7,6 +7,7 @@ const messages = {
   keytoolarge: 'Key too large.',
   nocrypto: 'Crypto unavailable.',
   operation: 'Encryption failed.',
+  rsasizelimit: 'Direct RSA message is too long.',
   short: 'Key too short.',
   toolarge: 'Input too large.',
   filetoolarge: 'File too large.'
@@ -36,6 +37,7 @@ test('encryption errors never reveal arbitrary implementation details', () => {
     getUserErrorMessage(Object.assign(new Error('OperationError'), { name: 'OperationError' }), false, messages),
     messages.auth
   );
+  assert.equal(getUserErrorMessage(new Error('rsasizelimit'), false, messages), messages.rsasizelimit);
 });
 
 test('development diagnostics include only allowlisted error codes and omit secret details', () => {
