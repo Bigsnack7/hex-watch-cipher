@@ -281,7 +281,7 @@ For Cloudflare Pages, response headers can be configured in a plain-text `_heade
 
 ## License
 
-This project is released under the [MIT License](LICENSE). If a `LICENSE` file isn't already in the repo root, add one with this project's chosen terms so GitHub displays the license badge correctly.
+This project is released under the [MIT License](LICENSE). 
 
 ## Author
 
