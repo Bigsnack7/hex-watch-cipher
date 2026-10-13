@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AES_TAG, LEGACY_AES_TAG, AES_KEY_SIZES, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG,
+  AES_TAG, LEGACY_AES_TAG, AES_KEY_SIZES, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG,
   MAX_MESSAGE_BYTES, MAX_TOKEN_CHARS, KDF_ITERATIONS,
   encryptAesGcm, decryptAesGcm, encryptCbcHmac, decryptCbcHmac,
   encryptRsaHybrid, decryptRsaHybrid, encryptRsaDirect, decryptRsaDirect,
+  encryptRsaThenAes, decryptRsaThenAes,
   generateRsaKeyPair, fingerprintRsaPublicKey,
   encryptGrumpyV2, decryptGrumpyV2,
   FILE_TAG, LEGACY_MAX_FILE_BYTES, LEGACY_MAX_FILE_TOKEN_CHARS, MAX_FILE_BYTES,
@@ -107,8 +108,11 @@ test('AES-GCM and CBC-HMAC normalize equivalent Unicode passphrases with NFKC', 
   const decomposed = 'cafe\u0301-passphrase-long';
   const aesToken = await encryptAesGcm('normalized AES', composed);
   const cbcToken = await encryptCbcHmac('normalized CBC', composed);
+  const pair = await generateRsaKeyPair();
+  const rsaAesToken = await encryptRsaThenAes('normalized RSA3', pair.publicKey, composed);
   assert.equal(await decryptAesGcm(aesToken, decomposed), 'normalized AES');
   assert.equal(await decryptCbcHmac(cbcToken, decomposed), 'normalized CBC');
+  assert.equal(await decryptRsaThenAes(rsaAesToken, pair.privateKey, decomposed), 'normalized RSA3');
 });
 
 test('AES-GCM keeps decrypting legacy CT1 tokens and rejects authenticated invalid UTF-8', async () => {
@@ -205,6 +209,52 @@ test('direct RSA-OAEP encrypts only short messages and round-trips with the matc
   const otherPair = await generateRsaKeyPair();
   await assert.rejects(decryptRsaDirect(boundaryToken, otherPair.privateKey));
   await assert.rejects(decryptRsaDirect(tamper(boundaryToken, RSA_DIRECT_TAG, 0), pair.privateKey));
+});
+
+test('RSA-first dual-key encryption requires both keys and enforces the RSA message limit', async () => {
+  const pair = await generateRsaKeyPair();
+  const otherPair = await generateRsaKeyPair();
+  for (const message of ['', 'Short RSA then AES 🔐']) {
+    const token = await encryptRsaThenAes(message, pair.publicKey, password);
+    assert.ok(token.startsWith(RSA_AES_TAG));
+    assert.equal(await decryptRsaThenAes(token, pair.privateKey, password), message);
+    await assert.rejects(decryptRsaThenAes(token, pair.privateKey, `${password}!`));
+    await assert.rejects(decryptRsaThenAes(token, otherPair.privateKey, password));
+  }
+
+  const boundaryMessage = 'x'.repeat(190);
+  const boundaryToken = await encryptRsaThenAes(boundaryMessage, pair.publicKey, password);
+  assert.equal(await decryptRsaThenAes(boundaryToken, pair.privateKey, password), boundaryMessage);
+  await assert.rejects(
+    encryptRsaThenAes(`${boundaryMessage}x`, pair.publicKey, password),
+    error => error.message === 'rsasizelimit'
+  );
+});
+
+test('RSA-first dual-key format rejects malformed, truncated, and modified tokens', async () => {
+  const pair = await generateRsaKeyPair();
+  const token = await encryptRsaThenAes('Authenticate every RSA3 layer.', pair.publicKey, password);
+  const payload = Buffer.from(token.slice(RSA_AES_TAG.length), 'base64url');
+  await assert.rejects(decryptRsaThenAes('RSA3.not*base64', pair.privateKey, password), error => error.message === 'format');
+  for (const length of [0, 1, 28, 29 + 256 + 15, payload.length - 1]) {
+    const truncated = RSA_AES_TAG + payload.subarray(0, length).toString('base64url');
+    await assert.rejects(
+      decryptRsaThenAes(truncated, pair.privateKey, password),
+      `truncation to ${length} bytes must fail`
+    );
+  }
+  for (const offset of [0, 1, 17, 29, payload.length - 1]) {
+    await assert.rejects(
+      decryptRsaThenAes(tamper(token, RSA_AES_TAG, offset), pair.privateKey, password),
+      `modified field at ${offset} must fail authentication`
+    );
+  }
+  const unsupportedVersion = Buffer.from(payload);
+  unsupportedVersion[0] = 2;
+  await assert.rejects(
+    decryptRsaThenAes(`${RSA_AES_TAG}${unsupportedVersion.toString('base64url')}`, pair.privateKey, password),
+    error => error.message === 'format'
+  );
 });
 
 test('direct RSA-OAEP rejects malformed, truncated, and oversized payloads', async () => {

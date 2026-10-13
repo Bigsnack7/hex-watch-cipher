@@ -1,8 +1,9 @@
 import {
-  MAX_AES_CIPHERTEXT_BYTES, MAX_RSA_WRAPPED_BYTES, RSA_DIRECT_TAG, RSA_TAG,
+  MAX_AES_CIPHERTEXT_BYTES, MAX_RSA_WRAPPED_BYTES, RSA_AES_TAG, RSA_DIRECT_TAG, RSA_TAG,
   assertMessageSize, b64, concat, decodeToken, decoder, encoder, requireCrypto, subtle
 } from './shared.mjs';
 import { readPem, writePem } from './pem.mjs';
+import { deriveAesKey } from './aes-gcm.mjs';
 
 async function importRsaKey(text, format, label, usage, extractable = false) {
   requireCrypto();
@@ -84,6 +85,51 @@ export async function decryptRsaDirect(token, pem) {
   );
   if (ciphertext.length !== privateKey.algorithm.modulusLength / 8) throw new Error('format');
   return decoder.decode(await subtle.decrypt({ name: 'RSA-OAEP' }, privateKey, ciphertext));
+}
+
+export async function encryptRsaThenAes(text, pem, password) {
+  requireCrypto();
+  assertMessageSize(text);
+  const publicKey = await importRsaKey(pem, 'spki', 'PUBLIC KEY', 'encrypt');
+  const plaintext = encoder.encode(text);
+  if (plaintext.length > rsaOaepMaxPlaintextBytes(publicKey)) throw new Error('rsasizelimit');
+  const rsaCiphertext = new Uint8Array(await subtle.encrypt(
+    { name: 'RSA-OAEP' }, publicKey, plaintext
+  ));
+  if (rsaCiphertext.length > MAX_RSA_WRAPPED_BYTES) throw new Error('keylarge');
+  const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = new Uint8Array(await subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: encoder.encode('RSA3:1') },
+    await deriveAesKey(password, salt, 256),
+    rsaCiphertext
+  ));
+  return RSA_AES_TAG + b64(concat(new Uint8Array([1]), salt, iv, ciphertext));
+}
+
+export async function decryptRsaThenAes(token, pem, password) {
+  requireCrypto();
+  const raw = decodeToken(token, RSA_AES_TAG, 1 + 16 + 12 + MAX_RSA_WRAPPED_BYTES + 16);
+  const headerLength = 1 + 16 + 12;
+  if (raw.length < headerLength + 256 + 16 || raw[0] !== 1) throw new Error('format');
+  const rsaCiphertext = await subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: raw.slice(17, 29),
+      additionalData: encoder.encode('RSA3:1')
+    },
+    await deriveAesKey(password, raw.slice(1, 17), 256),
+    raw.slice(headerLength)
+  );
+  const privateKey = validateRsaPrivateKey(
+    typeof pem === 'string' ? await importRsaKey(pem, 'pkcs8', 'PRIVATE KEY', 'decrypt') : pem
+  );
+  if (rsaCiphertext.byteLength !== privateKey.algorithm.modulusLength / 8) throw new Error('format');
+  const plaintext = decoder.decode(await subtle.decrypt(
+    { name: 'RSA-OAEP' }, privateKey, rsaCiphertext
+  ));
+  assertMessageSize(plaintext);
+  return plaintext;
 }
 
 export async function encryptRsaHybrid(text, pem) {

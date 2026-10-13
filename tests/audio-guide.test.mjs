@@ -10,9 +10,9 @@ import {
 const expectedModes = {
   aes: ['passphrase-based', 'CT2', 'access key'],
   cbc: ['compatibility method', 'CBC1', 'authentication'],
-  rsa: ['compatibility entry', 'RSA1', 'private key'],
   hybrid: ['recommended public-key method', 'RSA1', 'private key'],
   'rsa-direct': ['RSA-OAEP direct encryption', 'RSA2', '190 UTF-8 bytes'],
+  'rsa-aes': ['dual-key, short-message format', 'RSA3', 'both'],
   legacy: ['legacy-only method', 'Grumpy v2', 'insecure']
 };
 
@@ -38,6 +38,7 @@ test('AES narration reflects the selected derived-key size', () => {
 
 test('localized guides cover every cipher and include supported speech languages', () => {
   assert.deepEqual(Object.keys(NARRATION_LANGUAGES), ['en', 'yo', 'ig', 'ha', 'pcm', 'es', 'fr']);
+  assert.match(getNarrationGuide('rsa-aes', 'en', 256, 2048)[2], /190 UTF-8 bytes/);
   for (const language of Object.keys(NARRATION_LANGUAGES).filter(code => code !== 'en')) {
     for (const mode of Object.keys(NARRATION_GUIDES)) {
       const guide = getNarrationGuide(mode, language);
@@ -50,6 +51,7 @@ test('localized guides cover every cipher and include supported speech languages
       );
     }
   }
+  assert.match(getNarrationGuide('rsa-aes', 'fr', 256, 3072)[2], /318 octets UTF-8/);
 });
 
 test('active narration switches immediately to the guide for the newly selected method', async () => {
@@ -127,8 +129,8 @@ test('active narration switches immediately to the guide for the newly selected 
 
     controller.setNarrationMode('cbc');
     assert.match(utterances.at(-1).text, /CBC with HMAC/);
-    controller.setNarrationMode('rsa');
-    assert.match(utterances.at(-1).text, /AES-256-GCM key/);
+    controller.setNarrationMode('hybrid');
+    assert.match(utterances.at(-1).text, /AES-256-GCM encrypts the message/);
     assert.match(utterances.at(-1).text, /4096-bit RSA/);
     controller.setNarrationMode('rsa-direct');
     documentListeners.get('focusin')({
@@ -144,6 +146,14 @@ test('active narration switches immediately to the guide for the newly selected 
     });
     assert.match(utterances.at(-1).text, /chunked AES-256-GCM/i);
     assert.doesNotMatch(utterances.at(-1).text, /RSA Hybrid is the recommended/);
+    controller.setNarrationMode('rsa-aes');
+    controller.announceStatus('rsaKeyGenerated');
+    assert.match(utterances.at(-1).text, /446 UTF-8 bytes/);
+    documentListeners.get('focusin')({
+      target: { closest: () => ({ tagName: 'INPUT', id: 'key' }) }
+    });
+    assert.match(utterances.at(-1).text, /recipient RSA private key/i);
+    assert.match(utterances.at(-1).text, /RSA3 format/i);
     documentListeners.get('focusin')({
       target: { closest: () => ({ tagName: 'BUTTON', id: 'sfxB' }) }
     });
@@ -227,9 +237,23 @@ test('changing the narration language updates active speech and its speech-synth
     elementListeners.get(languageSelect).get('change')();
     assert.equal(utterances.at(-1).lang, 'ig-NG');
     assert.match(utterances.at(-1).text, /Usoro izochi ozi ị họọrọ/);
+    const focusin = documentListeners.get('focusin');
+    for (const [id, phrase] of [
+      ['narrLanguage', /Nhọrọ asụsụ olu/],
+      ['voxB', /Bọtịnụ olu/],
+      ['sfxB', /Njikwa ụda/],
+      ['eye', /Njikwa igosi/]
+    ]) {
+      focusin({ target: { closest: () => ({ id, tagName: id === 'narrLanguage' ? 'SELECT' : 'BUTTON' }) } });
+      assert.equal(utterances.at(-1).lang, 'ig-NG');
+      assert.match(utterances.at(-1).text, phrase);
+    }
     controller.announceStatus('fileFailed');
     assert.equal(utterances.at(-1).lang, 'ig-NG');
     assert.match(utterances.at(-1).text, /Ọrụ faịlụ ahụ emeghị nke ọma/);
+    assert.equal(controller.announceStatus('legacyMigrationPrepared'), true);
+    assert.equal(utterances.at(-1).lang, 'ig-NG');
+    assert.match(utterances.at(-1).text, /Ozi ochie dị n'oghere ozi ugbu a/);
     assert.equal(controller.announceStatus('unknown-event'), false);
 
     languageSelect.value = 'fr';
@@ -249,6 +273,96 @@ test('changing the narration language updates active speech and its speech-synth
     assert.match(utterances.at(-1).text, /Na method wey you choose/);
     controller.reset();
     assert.equal(documentListeners.has('focusin'), true);
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test('speech playback errors stop narration and reset its control', async () => {
+  const elements = new Map();
+  const utterances = [];
+  const elementListeners = new Map();
+  const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+  let failNextSpeak = true;
+  const makeElement = id => ({
+    id,
+    value: 'en',
+    textContent: '',
+    attributes: new Map(),
+    classList: {
+      values: new Set(),
+      add(value) { this.values.add(value); },
+      remove(value) { this.values.delete(value); },
+      contains(value) { return this.values.has(value); }
+    },
+    addEventListener(name, handler) {
+      const listeners = elementListeners.get(this) || new Map();
+      listeners.set(name, handler);
+      elementListeners.set(this, listeners);
+    },
+    removeEventListener() {},
+    setAttribute(name, value) { this.attributes.set(name, value); }
+  });
+  globalThis.document = {
+    hidden: false,
+    getElementById(id) {
+      if (!elements.has(id)) elements.set(id, makeElement(id));
+      return elements.get(id);
+    },
+    addEventListener() {},
+    removeEventListener() {}
+  };
+  globalThis.window = {
+    speechSynthesis: {
+      speak(utterance) {
+        if (failNextSpeak) {
+          failNextSpeak = false;
+          throw new Error('speech-start-failed');
+        }
+        utterances.push(utterance);
+      },
+      cancel() {},
+      getVoices() { return []; },
+      pause() {},
+      resume() {}
+    },
+    SpeechSynthesisUtterance: class {
+      constructor(text) { this.text = text; }
+    },
+    addEventListener() {}
+  };
+
+  try {
+    const controller = createAudioController({ isLocked: () => false });
+    const narrationButton = elements.get('voxB');
+    const click = elementListeners.get(narrationButton).get('click');
+    await click();
+    assert.equal(narrationButton.attributes.get('aria-pressed'), 'false');
+    assert.equal(narrationButton.textContent, 'Narration: Off');
+    assert.equal(elements.get('ntext').textContent, 'Off');
+    assert.match(elements.get('audioStatus').textContent, /Narration could not play/);
+    assert.equal(elements.get('audioStatus').classList.contains('error'), true);
+
+    await click();
+    utterances.at(-1).onerror();
+    assert.equal(narrationButton.attributes.get('aria-pressed'), 'false');
+    assert.equal(narrationButton.textContent, 'Narration: Off');
+    assert.equal(elements.get('ntext').textContent, 'Off');
+    assert.match(elements.get('audioStatus').textContent, /Narration could not play/);
+    assert.equal(elements.get('audioStatus').classList.contains('error'), true);
+
+    await click();
+    controller.announceStatus('messageEncrypted');
+    utterances.at(-1).onerror();
+    assert.equal(narrationButton.attributes.get('aria-pressed'), 'false');
+    assert.equal(narrationButton.textContent, 'Narration: Off');
+    assert.equal(elements.get('ntext').textContent, 'Off');
+    assert.match(elements.get('audioStatus').textContent, /Narration could not play/);
+    controller.reset();
   } finally {
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
@@ -317,13 +431,17 @@ test('narration explains focused controls and selected-method benefits while ena
     assert.match(utterances.at(-1).text, /CBC with HMAC is provided for compatibility/);
 
     const afterFocus = utterances.length;
-    documentListeners.get('click')({ target: control('key') });
+    documentListeners.get('click')({ type: 'click', target: control('key') });
     assert.equal(utterances.length, afterFocus, 'click after focus should not announce twice');
 
     focusin({ target: control('inp') });
     assert.match(utterances.at(-1).text, /Message or encrypted token field/);
     focusin({ target: control('encB') });
     assert.match(utterances.at(-1).text, /Encrypt message button/);
+    controller.announceStatus('operationFailed');
+    const failureAnnouncement = utterances.at(-1).text;
+    documentListeners.get('click')({ type: 'click', target: control('encB') });
+    assert.equal(utterances.at(-1).text, failureAnnouncement, 'click guidance must not override the operation result');
     controller.setNarrationMode('hybrid');
     focusin({ target: control('rsaPublic') });
     assert.match(utterances.at(-1).text, /SPKI PEM format/);

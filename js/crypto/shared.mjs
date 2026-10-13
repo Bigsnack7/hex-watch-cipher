@@ -7,6 +7,7 @@ export const LEGACY_AES_TAG = 'CT1.';
 export const CBC_TAG = 'CBC1.';
 export const RSA_TAG = 'RSA1.';
 export const RSA_DIRECT_TAG = 'RSA2.';
+export const RSA_AES_TAG = 'RSA3.';
 export const MAX_MESSAGE_BYTES = 100_000;
 export const MAX_TOKEN_CHARS = 140_000;
 export const MAX_RSA_KEY_CHARS = 20_000;

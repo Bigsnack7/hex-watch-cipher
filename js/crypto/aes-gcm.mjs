@@ -6,7 +6,7 @@ import {
 
 const AES_KEY_BYTES = new Map([[16, 128], [24, 192], [32, 256]]);
 
-async function deriveAesKey(password, salt, keyBits) {
+export async function deriveAesKey(password, salt, keyBits) {
   const base = await subtle.importKey('raw', normalizeKey(password), 'PBKDF2', false, ['deriveKey']);
   return subtle.deriveKey(
     { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: KDF_ITERATIONS },
