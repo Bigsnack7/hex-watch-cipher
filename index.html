@@ -49,8 +49,8 @@
           <option value="aes">AES-GCM · Passphrase-based (Recommended)</option>
           <option value="cbc">AES-CBC + HMAC · Compatibility</option>
           <option value="rsa-direct">RSA-OAEP · Direct encryption (short messages)</option>
-          <option value="rsa">RSA Hybrid · RSA1 format (compatibility)</option>
-          <option value="hybrid">RSA Hybrid · Recommended</option>
+          <option value="rsa-aes">RSA-OAEP + AES-GCM · Dual-key (short messages)</option>
+          <option value="hybrid">AES-GCM + RSA-OAEP · Hybrid (Recommended)</option>
           <option value="legacy">Grumpy v2 · Legacy only (Insecure)</option>
         </select>
         <span class="field-hint" id="modeHint">Authenticated encryption with a random salt and IV for each message.</span>

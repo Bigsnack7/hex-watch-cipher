@@ -9,13 +9,8 @@ export const NARRATION_GUIDES = Object.freeze({
     'To encrypt: enter a long, unique access key and your message, then select Encrypt message. Share the CBC1 token and the access key separately.',
     'To decrypt: paste the complete CBC1 token, enter the same access key, and select Decrypt message. Modified data or a wrong key is rejected. File encryption still uses AES-GCM.'
   ]),
-  rsa: Object.freeze([
-    'RSA Hybrid with RSA1 format is the compatibility entry for public-key encryption. It uses the same hybrid implementation as the recommended RSA Hybrid option: a fresh random AES-256-GCM key encrypts the message, and RSA-OAEP with SHA-256 protects that key.',
-    'To encrypt: generate a key pair for yourself or paste the recipient public key in SPKI PEM format. Verify its SHA-256 fingerprint with the recipient through a trusted separate channel, enter your message, then select Encrypt message.',
-    'Share the RSA1 token with the recipient. Do not share a private key. To decrypt, the recipient pastes the token, provides the matching private key in the private-key field, and selects Decrypt message. The access-key field is not used for RSA text messages.'
-  ]),
   hybrid: Object.freeze([
-    'RSA Hybrid is the recommended public-key method. AES-256-GCM encrypts the message with a fresh random key, and RSA-OAEP with SHA-256 protects that key. It uses the RSA1 format.',
+    'AES-GCM + RSA-OAEP is the recommended public-key method. AES-256-GCM encrypts the message with a fresh random key, and RSA-OAEP with SHA-256 protects that key. It uses the RSA1 format.',
     'To encrypt: generate a key pair for yourself or paste the recipient public key in SPKI PEM format. Verify its SHA-256 fingerprint through a trusted separate channel, enter your message, then select Encrypt message.',
     'Share the RSA1 token with the recipient, never the private key. To decrypt, the recipient pastes the token, supplies the matching private key, and selects Decrypt message. The access-key field is not used for RSA text messages.'
   ]),
@@ -23,6 +18,11 @@ export const NARRATION_GUIDES = Object.freeze({
     'RSA-OAEP direct encryption uses the RSA2 format and encrypts the message itself without AES. With the default 2048-bit key, the maximum is 190 UTF-8 bytes. Use RSA Hybrid for longer messages.',
     'To encrypt a short message, paste or generate the recipient public key, verify its SHA-256 fingerprint through a trusted separate channel, enter no more than 190 UTF-8 bytes, and select Encrypt message. Share the RSA2 token; never share the private key.',
     'To decrypt an RSA2 token, the recipient enters the matching private key and selects Decrypt message. The access-key field is not used. For longer messages, use hybrid RSA.'
+  ]),
+  'rsa-aes': Object.freeze([
+    'RSA-OAEP + AES-GCM is a dual-key, short-message format. RSA-OAEP encrypts the message first; PBKDF2 derives an AES-256-GCM key from your access-key passphrase, which then encrypts the RSA ciphertext. It uses the RSA3 format.',
+    'To encrypt: paste or generate the recipient public key, verify its SHA-256 fingerprint through a trusted separate channel, enter the shared access-key passphrase, and enter a message within the RSA key-size limit. Share the RSA3 token and passphrase separately.',
+    'To decrypt an RSA3 token, provide both the matching RSA private key and the same access-key passphrase. Both are required. The message limit depends on RSA key size; use AES-GCM + RSA-OAEP Hybrid for longer messages.'
   ]),
   legacy: Object.freeze([
     'Grumpy v2 is a legacy-only method and is cryptographically insecure. It does not provide reliable confidentiality or tamper detection. Use it only to process old-format messages, never to protect sensitive information; prefer AES-256-GCM.',
@@ -45,6 +45,7 @@ const STATUS_NARRATION = Object.freeze({
   en: Object.freeze({
     messageEncrypted: 'Message encrypted. The encrypted token is displayed in the result area.',
     messageDecrypted: 'Message decrypted. The plaintext is displayed in the result area; treat it as sensitive.',
+    legacyMigrationPrepared: 'Legacy plaintext is ready in the message field. Enter a new strong access key, then encrypt it with AES-256-GCM.',
     operationFailed: 'The operation failed. Check the selected method, key, and input, then try again.',
     fileEncrypted: 'File encrypted. The encrypted file has been saved.',
     fileDecrypted: 'File decrypted. The plaintext file has been saved; treat it as sensitive.',
@@ -61,6 +62,7 @@ const STATUS_NARRATION = Object.freeze({
   yo: Object.freeze({
     messageEncrypted: 'A ti fi ìfiránṣẹ́ pamọ́. Ààmì ìfiránṣẹ́ tí a fi pamọ́ wà ní ibi àbájáde.',
     messageDecrypted: 'A ti tú ìfìpamọ́ ìfiránṣẹ́. Ọ̀rọ̀ tó hàn jẹ́ àṣírí; pa á mọ́.',
+    legacyMigrationPrepared: 'Ọ̀rọ̀ ìtàn àtijọ́ ti ṣetán nínú ààyè ìfiránṣẹ́. Tẹ kọ́kọ́rọ́ ààbò tuntun tó lágbára, kí o sì fi AES-256-GCM pamọ́.',
     operationFailed: 'Iṣẹ́ náà kò ṣàṣeyọrí. Ṣàyẹ̀wò ọ̀nà, kọ́kọ́rọ́ àti ohun tí o tẹ̀ sí, kí o sì tún gbìyànjú.',
     fileEncrypted: 'A ti fi fáìlì pamọ́, a sì ti fi fáìlì ìpamọ́ náà pamọ́ sí ibi tí o yàn.',
     fileDecrypted: 'A ti tú ìfìpamọ́ fáìlì. Ọ̀rọ̀ inú fáìlì náà jẹ́ àṣírí; pa á mọ́.',
@@ -77,6 +79,7 @@ const STATUS_NARRATION = Object.freeze({
   ig: Object.freeze({
     messageEncrypted: 'Ezochiela ozi. Akara ozi e zoro ezo dị na mpaghara nsonaazụ.',
     messageDecrypted: 'Megheela ozi. E gosiri ozi mbụ; chekwaa ya nke ọma.',
+    legacyMigrationPrepared: 'Ozi ochie dị n\'oghere ozi ugbu a. Tinye paswọọdụ ọhụrụ siri ike, wee jiri AES-256-GCM zoo ya.',
     operationFailed: 'Ọrụ ahụ emeghị nke ọma. Lelee usoro, igodo na ozi i tinyere, wee nwaa ọzọ.',
     fileEncrypted: 'Ezochiela faịlụ ma chekwaa faịlụ e zoro ezo.',
     fileDecrypted: 'Megheela faịlụ. Faịlụ ahụ nwere ozi mbụ; chekwaa ya nke ọma.',
@@ -93,6 +96,7 @@ const STATUS_NARRATION = Object.freeze({
   ha: Object.freeze({
     messageEncrypted: 'An ɓoye saƙon. Alamar saƙon da aka ɓoye tana cikin wurin sakamako.',
     messageDecrypted: 'An buɗe saƙon. An nuna ainihin saƙon; kiyaye shi a sirrance.',
+    legacyMigrationPrepared: 'Tsohon saƙon yana shirye a wurin saƙo. Shigar da sabon kalmar sirri mai ƙarfi, sannan a ɓoye shi da AES-256-GCM.',
     operationFailed: 'Aikin bai yi nasara ba. Duba hanya, maɓalli da bayanan da ka shigar, sannan a sake gwadawa.',
     fileEncrypted: 'An ɓoye fayil ɗin kuma an ajiye fayil ɗin da aka ɓoye.',
     fileDecrypted: 'An buɗe fayil ɗin. Fayil ɗin yanzu yana ɗauke da ainihin bayanai; kiyaye shi a sirrance.',
@@ -109,6 +113,7 @@ const STATUS_NARRATION = Object.freeze({
   pcm: Object.freeze({
     messageEncrypted: 'Message don encrypt. Di encrypted token dey for di result area.',
     messageDecrypted: 'Message don decrypt. Di original message show; keep am private.',
+    legacyMigrationPrepared: 'Di old message don ready for di message box. Put new strong access key, then encrypt am with AES-256-GCM.',
     operationFailed: 'Di operation no work. Check di method, key and input, then try again.',
     fileEncrypted: 'File don encrypt and di encrypted file don save.',
     fileDecrypted: 'File don decrypt. Di original file don save; keep am private.',
@@ -125,6 +130,7 @@ const STATUS_NARRATION = Object.freeze({
   es: Object.freeze({
     messageEncrypted: 'Mensaje cifrado. El token cifrado aparece en el área de resultados.',
     messageDecrypted: 'Mensaje descifrado. El texto original aparece en el área de resultados; protégelo.',
+    legacyMigrationPrepared: 'El texto heredado está listo en el campo del mensaje. Introduce una clave de acceso nueva y segura y cifralo con AES-256-GCM.',
     operationFailed: 'La operación ha fallado. Comprueba el método, la clave y los datos, e inténtalo de nuevo.',
     fileEncrypted: 'Archivo cifrado. Se ha guardado el archivo cifrado.',
     fileDecrypted: 'Archivo descifrado. Se ha guardado el archivo original; protégelo.',
@@ -141,6 +147,7 @@ const STATUS_NARRATION = Object.freeze({
   fr: Object.freeze({
     messageEncrypted: 'Message chiffré. Le jeton chiffré apparaît dans la zone de résultat.',
     messageDecrypted: 'Message déchiffré. Le texte original apparaît dans la zone de résultat ; protégez-le.',
+    legacyMigrationPrepared: 'Le texte hérité est prêt dans le champ du message. Saisissez une nouvelle clé d’accès robuste, puis chiffrez-le avec AES-256-GCM.',
     operationFailed: 'Échec de l’opération. Vérifiez la méthode, la clé et les données, puis réessayez.',
     fileEncrypted: 'Fichier chiffré. Le fichier chiffré a été enregistré.',
     fileDecrypted: 'Fichier déchiffré. Le fichier original a été enregistré ; protégez-le.',
@@ -288,10 +295,43 @@ const LOCALIZED_GUIDES = Object.freeze({
   })
 });
 
+const RSA_AES_LOCALIZED_GUIDES = Object.freeze({
+  yo: Object.freeze([
+    'Ọ̀nà RSA-OAEP àti AES-GCM yìí nílò kọ́kọ́rọ́ méjì, ó sì wà fún ọ̀rọ̀ kúkúrú. RSA-OAEP ló kọ́kọ́ fi ọ̀rọ̀ náà pamọ́; lẹ́yìn náà AES-256-GCM tó lo kọ́kọ́rọ́ ààbò rẹ ló bo àbájáde RSA. Ààmì rẹ̀ ni RSA3.',
+    'Láti fi pamọ́, lo kọ́kọ́rọ́ gbogbogbò ẹni tó máa gba ọ̀rọ̀ náà, ṣàyẹ̀wò àmì SHA-256 rẹ̀ ní ọ̀nà mìíràn tó ṣeé gbẹ́kẹ̀ lé, tẹ kọ́kọ́rọ́ ààbò tí ẹ pín, kí o sì tẹ ọ̀rọ̀ kúkúrú tó bá ìwọ̀n kọ́kọ́rọ́ RSA mu. Pín ààmì RSA3 àti kọ́kọ́rọ́ ààbò lọ́tọ̀.',
+    'Láti tú ààmì RSA3, lo kọ́kọ́rọ́ àṣírí RSA tó bá a mu àti kọ́kọ́rọ́ ààbò kan náà. A nílò méjèèjì. Ààlà ọ̀rọ̀ sinmi lórí ìwọ̀n kọ́kọ́rọ́ RSA; lo AES-GCM àti RSA-OAEP fún ọ̀rọ̀ tó gùn.'
+  ]),
+  ig: Object.freeze([
+    'Usoro RSA-OAEP na AES-GCM a chọrọ igodo abụọ, ọ dịkwa mma naanị maka ozi dị mkpirikpi. RSA-OAEP na-ezochi ozi mbụ; AES-256-GCM nke paswọọdụ gị na-emesịa ezochi nsonaazụ RSA. Akara ya bụ RSA3.',
+    'Iji zoo ozi, jiri igodo ọha onye ga-enweta ya ma nyochaa akara SHA-256 n’ụzọ ọzọ a pụrụ ịtụkwasị obi. Tinye paswọọdụ unu kwekọrịtara na obere ozi dabara na nha igodo RSA. Ziga akara RSA3 na paswọọdụ iche iche.',
+    'Iji mepee akara RSA3, tinye igodo nzuzo RSA ziri ezi na otu paswọọdụ ahụ. A chọrọ ha abụọ. Oke ozi dabere na nha igodo RSA; jiri AES-GCM na RSA-OAEP maka ozi toro ogologo.'
+  ]),
+  ha: Object.freeze([
+    'Wannan hanyar RSA-OAEP da AES-GCM tana buƙatar maɓallai biyu kuma ta dace da gajerun saƙonni kawai. RSA-OAEP na ɓoye saƙon farko; AES-256-GCM da kalmar sirrinka ta samar daga baya yana ɓoye sakamakon RSA. Alamar ita ce RSA3.',
+    'Don ɓoyewa, yi amfani da maɓallin jama’a na mai karɓa kuma ka tabbatar da tambarin SHA-256 ta wata amintacciyar hanya. Shigar da kalmar sirrin da kuka amince da ita da gajeren saƙo da ya dace da girman RSA. A aika da alamar RSA3 da kalmar sirri dabam.',
+    'Don buɗe RSA3, shigar da maɓallin RSA na sirri da ya dace da kalmar sirrin da aka yi amfani da ita. Ana buƙatar su duka. Iyakar saƙo ta danganta da girman maɓallin RSA; yi amfani da AES-GCM da RSA-OAEP don saƙonni masu tsawo.'
+  ]),
+  pcm: Object.freeze([
+    'Dis RSA-OAEP plus AES-GCM method need two keys, and e good for short messages only. RSA-OAEP hide di message first; AES-256-GCM wey your passphrase derive go hide di RSA result after. Di token na RSA3.',
+    'To encrypt, use di recipient public key and confirm di SHA-256 fingerprint through another trusted way. Put di shared access-key passphrase and short message wey fit di RSA key size. Send di RSA3 token and passphrase separately.',
+    'To decrypt RSA3, you need both di matching RSA private key and di same access-key passphrase. Di message limit depend on di RSA key size; use AES-GCM plus RSA-OAEP Hybrid for longer messages.'
+  ]),
+  es: Object.freeze([
+    'Este método RSA-OAEP + AES-GCM requiere dos claves y solo sirve para mensajes cortos. RSA-OAEP cifra primero el mensaje; después, AES-256-GCM, derivado de tu frase de acceso, cifra el resultado RSA. El formato es RSA3.',
+    'Para cifrar, usa la clave pública del destinatario y verifica su huella SHA-256 por un canal de confianza independiente. Introduce la frase de acceso compartida y un mensaje dentro del límite de la clave RSA. Comparte el token RSA3 y la frase por separado.',
+    'Para descifrar RSA3 necesitas tanto la clave privada RSA correspondiente como la misma frase de acceso. El límite del mensaje depende del tamaño de la clave RSA; usa AES-GCM + RSA-OAEP Hybrid para mensajes más largos.'
+  ]),
+  fr: Object.freeze([
+    'Cette méthode RSA-OAEP + AES-GCM nécessite deux clés et convient uniquement aux messages courts. RSA-OAEP chiffre d’abord le message ; AES-256-GCM, dérivé de votre phrase d’accès, chiffre ensuite le résultat RSA. Le format est RSA3.',
+    'Pour chiffrer, utilisez la clé publique du destinataire et vérifiez son empreinte SHA-256 par un canal indépendant fiable. Saisissez la phrase d’accès partagée et un message respectant la limite de la clé RSA. Partagez le jeton RSA3 et la phrase séparément.',
+    'Pour déchiffrer RSA3, il faut la clé privée RSA correspondante et la même phrase d’accès. La limite dépend de la taille de la clé RSA ; utilisez AES-GCM + RSA-OAEP Hybrid pour les messages plus longs.'
+  ])
+});
+
 function getLocalizedGuide(mode, language) {
   const translations = LOCALIZED_GUIDES[language];
   const selectedMode = NARRATION_GUIDES[mode] ? mode : 'aes';
-  const key = selectedMode === 'rsa' || selectedMode === 'hybrid';
+  const key = selectedMode === 'hybrid';
   const action = key ? 'rsa' : selectedMode === 'legacy' ? 'legacy' : 'password';
   return Object.freeze([
     `${translations.intro} ${translations.facts[selectedMode]}`,
@@ -302,7 +342,9 @@ function getLocalizedGuide(mode, language) {
 
 export function getNarrationGuide(mode, language = 'en', keyBits = 256, rsaKeyBits = 2048) {
   let guide;
-  if (mode === 'rsa-direct') {
+  if (mode === 'rsa-aes') {
+    guide = RSA_AES_LOCALIZED_GUIDES[language] || NARRATION_GUIDES['rsa-aes'];
+  } else if (mode === 'rsa-direct') {
     guide = DIRECT_RSA_LOCALIZED_GUIDES[language] || NARRATION_GUIDES['rsa-direct'];
   } else if (LOCALIZED_GUIDES[language]) {
     guide = getLocalizedGuide(mode, language);
@@ -310,9 +352,22 @@ export function getNarrationGuide(mode, language = 'en', keyBits = 256, rsaKeyBi
     guide = NARRATION_GUIDES[mode] || NARRATION_GUIDES.aes;
   }
   if (mode === 'aes') return guide.map(line => line.replaceAll('AES-256-GCM', `AES-${keyBits}-GCM`));
-  if (mode === 'rsa' || mode === 'hybrid' || mode === 'rsa-direct') {
+  if (mode === 'hybrid' || mode === 'rsa-direct' || mode === 'rsa-aes') {
     const withRsaSize = [...guide];
     withRsaSize[0] = `${withRsaSize[0]} ${getRsaKeySizeNarration(language, rsaKeyBits)}`;
+    if (mode === 'rsa-aes') {
+      const maxBytes = rsaKeyBits / 8 - 66;
+      const limits = {
+        en: `A generated RSA-${rsaKeyBits} key allows up to ${maxBytes} UTF-8 bytes; pasted keys have their own limit.`,
+        yo: `Pẹ̀lú kọ́kọ́rọ́ RSA-${rsaKeyBits} tí a ṣẹ̀dá, ààlà jẹ́ báítì ${maxBytes}; kọ́kọ́rọ́ tí a lẹ̀ mọ́ ní ààlà tirẹ̀.`,
+        ig: `Igodo RSA-${rsaKeyBits} e mepụtara nwere oke byte ${maxBytes}; igodo ọha e tinyere nwere oke nke ya.`,
+        ha: `Maɓallin RSA-${rsaKeyBits} da aka ƙirƙira yana da iyakar byte ${maxBytes}; maɓallan da aka manna suna da nasu iyaka.`,
+        pcm: `Generated RSA-${rsaKeyBits} key fit carry up to ${maxBytes} UTF-8 bytes; pasted keys get their own limit.`,
+        es: `Una clave RSA-${rsaKeyBits} generada admite hasta ${maxBytes} bytes UTF-8; las claves pegadas tienen su propio límite.`,
+        fr: `Une clé RSA-${rsaKeyBits} générée accepte jusqu’à ${maxBytes} octets UTF-8 ; les clés collées ont leur propre limite.`
+      };
+      withRsaSize[2] = `${withRsaSize[2]} ${limits[language] || limits.en}`;
+    }
     return withRsaSize;
   }
   return guide;
@@ -386,16 +441,33 @@ function getControlNarration(id, language) {
 }
 
 function getRsaKeySizeNarration(language, keyBits) {
+  const maxBytes = keyBits / 8 - 66;
   const phrases = {
-    en: `RSA key-size selector. New key pairs generated here will use ${keyBits}-bit RSA. Pasted or imported keys keep their existing size. Keys below 2048 bits are not supported.`,
-    yo: `Aṣàyàn ìwọ̀n kọ́kọ́rọ́ RSA. Àwọn kọ́kọ́rọ́ tuntun tí a ṣẹ̀dá níbí yóò jẹ́ RSA bítì ${keyBits}. Àwọn kọ́kọ́rọ́ tí a lẹ̀ mọ́ tàbí kó wọlé yóò pa ìwọ̀n tiwọn mọ́. A kò gba kọ́kọ́rọ́ tó kéré sí bítì 2048.`,
-    ig: `Nhọrọ nha igodo RSA. Igodo ọhụrụ e mepụtara ebe a ga-eji RSA bit ${keyBits}. Igodo e tinyere ma ọ bụ bubata na-edobe nha nke ha. A naghị akwado igodo na-erughị bit 2048.`,
-    ha: `Zaɓin girman maɓallin RSA. Sabbin maɓallan da aka ƙirƙira a nan za su yi amfani da RSA mai bit ${keyBits}. Maɓallan da aka manna ko shigo da su za su riƙe girman nasu. Ba a tallafa wa ƙasa da bit 2048 ba.`,
-    pcm: `RSA key size option. New key pairs wey you generate here go use ${keyBits}-bit RSA. Keys wey you paste or import go keep their own size. We no support keys wey pass below 2048 bits.`,
-    es: `Selector del tamaño de clave RSA. Los pares nuevos generados aquí usarán RSA de ${keyBits} bits. Las claves pegadas o importadas conservan su tamaño. No se admiten claves inferiores a 2048 bits.`,
-    fr: `Sélecteur de taille de clé RSA. Les nouvelles paires générées ici utiliseront RSA ${keyBits} bits. Les clés collées ou importées conservent leur taille. Les clés de moins de 2048 bits ne sont pas prises en charge.`
+    en: `RSA key-size selector. New key pairs generated here will use ${keyBits}-bit RSA. Direct RSA and RSA3 dual-key messages allow up to ${maxBytes} UTF-8 bytes with this size. Pasted or imported keys keep their own size and limit. Keys below 2048 bits are not supported.`,
+    yo: `Aṣàyàn ìwọ̀n kọ́kọ́rọ́ RSA. Àwọn kọ́kọ́rọ́ tuntun tí a ṣẹ̀dá níbí yóò jẹ́ RSA bítì ${keyBits}. RSA tààrà àti ìfiránṣẹ́ RSA3 nílò báítì UTF-8 tó pọ̀ jù ${maxBytes} fún ìwọ̀n yìí. Kọ́kọ́rọ́ tí a lẹ̀ mọ́ tàbí kó wọlé ní ìwọ̀n àti ààlà tirẹ̀. A kò gba kọ́kọ́rọ́ tó kéré sí bítì 2048.`,
+    ig: `Nhọrọ nha igodo RSA. Igodo ọhụrụ e mepụtara ebe a ga-eji RSA bit ${keyBits}. Ozi direct RSA na RSA3 nwere oke byte UTF-8 ${maxBytes} na nha a. Igodo e tinyere ma ọ bụ bubata nwere nha na oke nke ha. A naghị akwado igodo na-erughị bit 2048.`,
+    ha: `Zaɓin girman maɓallin RSA. Sabbin maɓallan da aka ƙirƙira a nan za su yi amfani da RSA mai bit ${keyBits}. Saƙonnin direct RSA da RSA3 suna da iyakar byte UTF-8 ${maxBytes} a wannan girman. Maɓallan da aka manna ko shigo da su suna da nasu girma da iyaka. Ba a tallafa wa ƙasa da bit 2048 ba.`,
+    pcm: `RSA key size option. New key pairs wey you generate here go use ${keyBits}-bit RSA. Direct RSA and RSA3 dual-key message fit get up to ${maxBytes} UTF-8 bytes for dis size. Pasted or imported keys get their own size and limit. We no support keys below 2048 bits.`,
+    es: `Selector del tamaño de clave RSA. Los pares nuevos generados aquí usarán RSA de ${keyBits} bits. Los mensajes RSA directos y RSA3 admiten hasta ${maxBytes} bytes UTF-8 con este tamaño. Las claves pegadas o importadas tienen su propio tamaño y límite. No se admiten claves inferiores a 2048 bits.`,
+    fr: `Sélecteur de taille de clé RSA. Les nouvelles paires générées ici utiliseront RSA ${keyBits} bits. Les messages RSA direct et RSA3 acceptent jusqu’à ${maxBytes} octets UTF-8 avec cette taille. Les clés collées ou importées ont leur propre taille et leur propre limite. Les clés de moins de 2048 bits ne sont pas prises en charge.`
   };
   return phrases[language] || phrases.en;
+}
+
+function getRsaGeneratedNarration(language, keyBits, mode) {
+  const maxBytes = keyBits / 8 - 66;
+  const message = STATUS_NARRATION[language]?.rsaKeyGenerated || STATUS_NARRATION.en.rsaKeyGenerated;
+  if (mode !== 'rsa-direct' && mode !== 'rsa-aes') return message;
+  const limit = {
+    en: `This ${keyBits}-bit key allows up to ${maxBytes} UTF-8 bytes for this short-message method.`,
+    yo: `Kọ́kọ́rọ́ bítì ${keyBits} yìí gba báítì UTF-8 tó pọ̀ jù ${maxBytes} fún ọ̀nà ìfiránṣẹ́ kúkúrú yìí.`,
+    ig: `Igodo bit ${keyBits} a nwere oke byte UTF-8 ${maxBytes} maka usoro ozi dị mkpirikpi a.`,
+    ha: `Wannan maɓallin bit ${keyBits} yana da iyakar byte UTF-8 ${maxBytes} ga wannan hanyar saƙo gajere.`,
+    pcm: `Dis ${keyBits}-bit key fit carry up to ${maxBytes} UTF-8 bytes for dis short-message method.`,
+    es: `Esta clave de ${keyBits} bits admite hasta ${maxBytes} bytes UTF-8 para este método de mensajes cortos.`,
+    fr: `Cette clé de ${keyBits} bits accepte jusqu’à ${maxBytes} octets UTF-8 pour cette méthode de messages courts.`
+  }[language] || `This ${keyBits}-bit key allows up to ${maxBytes} UTF-8 bytes for this short-message method.`;
+  return `${message} ${limit}`;
 }
 
 export function createAudioController({ isLocked }) {
@@ -511,6 +583,15 @@ export function createAudioController({ isLocked }) {
     narrationText.textContent = 'Off';
   }
 
+  function failNarration(generation) {
+    if (generation !== narrationGeneration) return;
+    narrationEnabled = false;
+    stopNarration();
+    resetNarrationToggle();
+    audioStatus.textContent = 'Narration could not play. Check your browser speech settings.';
+    audioStatus.classList.add('error');
+  }
+
   function say(generation) {
     if (generation !== narrationGeneration || !narrationRunning) return;
     if (narrationIndex >= narrationGuide.length) {
@@ -541,33 +622,23 @@ export function createAudioController({ isLocked }) {
         narrationTimer = setTimeout(() => say(generation), 3000);
       };
       utterance.onerror = () => {
-        if (generation !== narrationGeneration) return;
-        stopNarration();
-        narrationEnabled = false;
-        resetNarrationToggle();
-        audioStatus.textContent = 'Narration could not play. Check your browser speech settings.';
-        audioStatus.classList.add('error');
+        failNarration(generation);
       };
       window.speechSynthesis.speak(utterance);
-    } catch (error) {
-      if (generation !== narrationGeneration) return;
-      narrationRunning = false;
-      narration.classList.remove('active');
-      light.classList.remove('active');
-      narrationText.textContent = 'Off';
-      $('voxB').textContent = 'Narration: Off';
-      $('voxB').setAttribute('aria-pressed', 'false');
-      throw error;
+    } catch {
+      failNarration(generation);
     }
   }
 
   function startNarration() {
     if (!speech) throw new Error('speech-unavailable');
-    if (narrationRunning) return;
+    if (narrationRunning) return true;
     audioStatus.textContent = '';
     audioStatus.classList.remove('error');
+    narrationEnabled = true;
     narrationRunning = true;
     say(++narrationGeneration);
+    return narrationRunning;
   }
 
   function setNarrationMode(mode) {
@@ -633,7 +704,8 @@ export function createAudioController({ isLocked }) {
         return getRsaKeySizeNarration(narrationLanguage, narrationRsaKeyBits);
       }
       if (id === 'key' || id === 'keyHint') {
-        return narrationMode === 'rsa' || narrationMode === 'hybrid' || narrationMode === 'rsa-direct'
+        if (narrationMode === 'rsa-aes') return narrationGuide[1];
+        return narrationMode === 'hybrid' || narrationMode === 'rsa-direct'
           ? narrationGuide[2]
           : narrationGuide[1];
       }
@@ -654,12 +726,14 @@ export function createAudioController({ isLocked }) {
     const why = {
       aes: 'AES-GCM is the recommended password-based choice because encryption and tamper detection are built into one widely supported mode.',
       cbc: 'CBC with HMAC is provided for compatibility with CBC-based workflows; AES-GCM is generally simpler for new messages.',
-      'rsa-direct': 'RSA-OAEP direct encryption encrypts the message itself and is limited to short messages: at most 190 UTF-8 bytes with a 2048-bit key. Choose RSA Hybrid for longer messages.',
-      rsa: 'The RSA Hybrid compatibility entry uses the RSA1 format and the same implementation as the recommended RSA Hybrid option. It encrypts to a recipient public key instead of sharing an access key first.',
-      hybrid: 'RSA Hybrid is the recommended public-key method, using RSA public-key delivery for a fresh AES-GCM key. The sender and recipient do not need to share a message passphrase.',
+      'rsa-direct': 'RSA-OAEP direct encryption encrypts the message itself and is limited to short messages: at most 190 UTF-8 bytes with a 2048-bit key. Choose AES-GCM + RSA-OAEP Hybrid for longer messages.',
+      'rsa-aes': 'RSA-OAEP encrypts the short message first, then AES-GCM encrypts that RSA ciphertext using a key derived from a shared passphrase. Decryption requires both the recipient private key and that passphrase; this RSA3 format is limited by the RSA message-size limit.',
+      hybrid: 'AES-GCM + RSA-OAEP is the recommended public-key method, using RSA public-key delivery for a fresh AES-GCM key. The sender and recipient do not need to share a message passphrase.',
       legacy: 'Grumpy v2 is not better for security. It is available for old-format compatibility and testing, but use AES-GCM or verified RSA hybrid encryption for new messages.'
     }[narrationMode];
-    const accessKey = narrationMode === 'rsa' || narrationMode === 'hybrid' || narrationMode === 'rsa-direct'
+    const accessKey = narrationMode === 'rsa-aes'
+      ? 'This dual-key mode requires a shared passphrase for its AES-GCM layer as well as the recipient RSA private key.'
+      : narrationMode === 'hybrid' || narrationMode === 'rsa-direct'
       ? 'The access key is not used for RSA text messages. It is used for file encryption and password-based modes.'
       : narrationMode === 'legacy'
         ? 'For Grumpy v2 compatibility or testing, enter the legacy key. This cipher is insecure, does not reliably protect confidentiality or detect tampering, and is not suitable for new or sensitive messages.'
@@ -690,10 +764,10 @@ export function createAudioController({ isLocked }) {
       fileEncrypt: 'Encrypt and download file button. It encrypts the selected file using chunked AES-256-GCM and the access key, then saves an encrypted file.',
       fileDecrypt: 'Decrypt and download file button. It verifies each AES-GCM chunk before writing the corresponding plaintext file. Use the same access key used for encryption.'
     };
-    if (id === 'narrLanguage') return 'Narration language selector. Choose the language for spoken guidance.';
-    if (id === 'voxB') return getControlNarration(id, 'en');
-    if (id === 'sfxB') return getControlNarration(id, 'en');
-    if (id === 'eye') return getControlNarration(id, 'en');
+    if (id === 'narrLanguage') return getControlNarration(id, narrationLanguage);
+    if (id === 'voxB') return getControlNarration(id, narrationLanguage);
+    if (id === 'sfxB') return getControlNarration(id, narrationLanguage);
+    if (id === 'eye') return getControlNarration(id, narrationLanguage);
     if (id === 'aesKeySizeHint') return guides.aesKeySize;
     if (id === 'aesKeySize' || id === 'rsaKeySize') return guides[id];
     if (id === 'key') return `${guides.key} ${why}`;
@@ -750,25 +824,24 @@ export function createAudioController({ isLocked }) {
         narrationTimer = setTimeout(() => say(generation), 1500);
       };
       utterance.onerror = () => {
-        if (generation !== narrationGeneration) return;
-        narration.classList.remove('active');
-        light.classList.remove('active');
-        reportError(new Error('speech-failed'));
+        failNarration(generation);
       };
       window.speechSynthesis.speak(utterance);
-    } catch (error) {
-      narration.classList.remove('active');
-      light.classList.remove('active');
-      reportError(error);
+    } catch {
+      failNarration(generation);
     }
   }
 
   function announceContext(event) {
+    if (event.type === 'click' &&
+        event.target.closest?.('input,textarea,select,button')) return;
     announceMessage(getContextualGuide(event.target));
   }
 
   function announceStatus(status) {
-    const message = STATUS_NARRATION[narrationLanguage]?.[status];
+    const message = status === 'rsaKeyGenerated'
+      ? getRsaGeneratedNarration(narrationLanguage, narrationRsaKeyBits, narrationMode)
+      : STATUS_NARRATION[narrationLanguage]?.[status];
     if (!message) return false;
     announceMessage(message);
     return true;
@@ -813,6 +886,10 @@ export function createAudioController({ isLocked }) {
         audioStatus.textContent = '';
         audioStatus.classList.remove('error');
       } catch (error) {
+        if (button.id === 'voxB') {
+          narrationEnabled = false;
+          stopNarration();
+        }
         enabled = isLocked() ? false : !next;
         render();
         if (!isLocked()) reportError(error);
@@ -832,8 +909,7 @@ export function createAudioController({ isLocked }) {
   });
   resetNarrationToggle = toggle($('voxB'), 'Narration: On', 'Narration: Off', async enabled => {
     if (enabled) {
-      startNarration();
-      narrationEnabled = true;
+      return startNarration();
     } else {
       narrationEnabled = false;
       stopNarration();
