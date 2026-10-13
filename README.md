@@ -1,212 +1,241 @@
 # Hex Watch Cipher
 
-Hex Watch Cipher is a browser-based tool for encrypting and decrypting messages and files on your own device. It combines password-based authenticated encryption, RSA public-key hybrid encryption, large-file encryption, and compatibility with an older legacy cipher in a dark purple workspace.
+Hex Watch Cipher is a static, browser-based workspace for encrypting and decrypting text and files on your own device. It offers password-based AES encryption, RSA public-key encryption, chunked file encryption, legacy-format compatibility, multilingual narration, and a privacy lock.
 
-The application has no account system, application backend, cloud key storage, or recovery service. It uses the browser's native Web Crypto API and keeps cryptographic operations in the page.
+Modern encryption and decryption run in the browser through the Web Crypto API; Grumpy v2 is a separate JavaScript implementation retained only for legacy compatibility. There is no application backend, account system, remote key storage, or recovery service. This is a utility for producing encrypted data to share through a separate channel—not a messaging service or a substitute for verifying who you are communicating with.
 
-> [!WARNING]
-> **Encryption does not make a compromised device, browser, or hosting environment safe.** Use AES-256-GCM for new password-based messages, or verified RSA hybrid encryption when you need public-key encryption. Direct RSA is only for very short messages; use hybrid RSA for longer messages. Grumpy v2 encryption/decryption is available for legacy compatibility and testing only; it is cryptographically insecure and must never protect sensitive information. Choose a strong, unique passphrase and protect any exported private-key backup.
+> [!CAUTION]
+> **Use AES-GCM for new password-protected messages, or verified RSA hybrid encryption when encrypting to a recipient's public key.** Direct RSA is suitable only for very short messages. The legacy Grumpy v2 cipher is insecure and must not be used to protect sensitive information. Browser-side encryption cannot protect data from a compromised device, browser, application code, or hosting origin.
 
 ## Contents
 
-- [What the project does](#what-the-project-does)
+- [Features](#features)
 - [Encryption methods](#encryption-methods)
-- [Encrypt and decrypt files](#encrypt-and-decrypt-files)
+- [Text encryption details](#text-encryption-details)
 - [RSA keys and fingerprints](#rsa-keys-and-fingerprints)
-- [Downloads, privacy, and workspace lock](#downloads-privacy-and-workspace-lock)
-- [Usage](#usage)
-- [Run locally](#run-locally)
-- [Temporary Cloudflare Pages upload](#temporary-cloudflare-pages-upload)
+- [File encryption](#file-encryption)
+- [Narration and sound](#narration-and-sound)
+- [Quick start](#quick-start)
+- [Limits and behavior](#limits-and-behavior)
+- [Privacy and workspace lock](#privacy-and-workspace-lock)
+- [Run and deploy](#run-and-deploy)
 - [Tests](#tests)
-- [Project structure](#project-structure)
+- [Project layout](#project-layout)
 - [Security model and limitations](#security-model-and-limitations)
-- [Deployment headers](#deployment-headers)
+- [Recommended HTTP security headers](#recommended-http-security-headers)
 
-## What the project does
+## Features
 
-Hex Watch Cipher helps you protect a message or file before you share it through a separate channel. It produces a portable encrypted token or file locally in the browser. Depending on the chosen method, the recipient needs the same passphrase or the private key corresponding to the public key used for encryption.
-
-The app is a local encryption workspace, not a messaging service. It does not send messages, manage contacts, verify identities for you, synchronize keys, or provide password or key recovery. You are responsible for safely exchanging passphrases, verifying public-key fingerprints, and storing any key backups.
+- Encrypt and decrypt text locally using AES-GCM, authenticated AES-CBC compatibility mode, RSA hybrid encryption, or direct RSA for short messages.
+- Select a 128-, 192-, or 256-bit derived key for AES-GCM.
+- Generate 2048-, 3072-, or 4096-bit RSA-OAEP key pairs, import and export RSA PEM keys, and compare SHA-256 public-key fingerprints.
+- Encrypt files with chunked AES-256-GCM, including files up to 1 GiB; decrypt earlier HWF1 files up to 1 MiB.
+- Copy results, download encrypted text tokens, and use supported browser save-file pickers for large file operations.
+- Hear narration in English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, or French. The browser's installed speech voices determine whether a language can be spoken.
+- Automatically clear sensitive workspace fields after inactivity or when the page is hidden by a page-lifecycle event.
+- Use a responsive interface with keyboard shortcuts, operation status, progress updates, and accessible status announcements.
 
 ## Encryption methods
 
-| Method | Token format | Key input | Recommended use |
+| Method in the app | Token / file format | Key material | Use |
 | --- | --- | --- | --- |
-| **AES-GCM (128, 192, or 256-bit key)** | `CT2.` | A passphrase | Default choice for new password-based messages. 256-bit is recommended; authenticated encryption detects modification. Older `CT1.` AES-256-GCM tokens remain decryptable. |
-| **AES-256-CBC + HMAC-SHA-256** | `CBC1.` | A passphrase | Compatibility with CBC-based workflows. Prefer AES-GCM for new messages. The HMAC is verified before decryption. |
-| **RSA-OAEP direct (short messages only)** | `RSA2.` | Recipient's RSA public key | Encrypting a short message directly with RSA. Maximum size depends on the key: 190 UTF-8 bytes with 2048 bits, 318 with 3072 bits, or 446 with 4096 bits. Use hybrid RSA for longer messages. |
-| **RSA-OAEP + AES-256-GCM hybrid** | `RSA1.` | Recipient's RSA public key | Encrypting a message for a recipient without sharing a message passphrase first. |
-| **Grumpy v2** | Legacy text | A non-empty key | Encrypting/decrypting in the old format for compatibility/testing only. Insecure and unsuitable for protecting information. |
+| **AES-GCM · Passphrase-based** | `CT2.` | Passphrase | Recommended for new password-protected text. Authenticated encryption detects a wrong passphrase or modified token. |
+| **AES-CBC + HMAC · Compatibility** | `CBC1.` | Passphrase | For compatibility with CBC workflows. The HMAC is verified before decryption. Prefer AES-GCM for new messages. |
+| **RSA Hybrid · Recommended** | `RSA1.` | Recipient's RSA public key | For encrypting messages to a recipient without first sharing a passphrase. AES-GCM encrypts the message; RSA-OAEP wraps the message key. |
+| **RSA-OAEP · Direct (short messages)** | `RSA2.` | Recipient's RSA public key | Direct RSA-OAEP encryption for very short text only. Use RSA Hybrid for longer messages. |
+| **Grumpy v2 · Legacy only (Insecure)** | Legacy text | Non-empty legacy key | Compatibility and testing only. Does not provide reliable confidentiality or tamper detection. |
 
-Direct RSA and hybrid RSA are separate methods. Direct RSA encrypts the entire short message with RSA-OAEP and uses `RSA2.` tokens. The hybrid method uses AES-GCM for the message and RSA-OAEP to protect its AES key, and uses `RSA1.` tokens. Prefer hybrid RSA for longer messages.
+The method menu includes an RSA Hybrid compatibility entry and a recommended RSA Hybrid entry; both use the same implementation and `RSA1.` format. Neither RSA method signs messages.
 
-### AES-GCM (recommended password-based method)
+**There is no AES-ECB option.** ECB reveals repeated plaintext patterns and is inappropriate for protecting messages. The separate AES-CBC compatibility option is not an unauthenticated AES mode: it uses encrypt-then-MAC with HMAC-SHA-256.
 
-Choose a 128-, 192-, or 256-bit AES-GCM key; 256 bits is recommended. The app normalizes the passphrase with Unicode NFKC, then derives the selected key size with PBKDF2-HMAC-SHA-256 using 600,000 iterations and a fresh, random 16-byte salt. The passphrase itself is not the AES key, so do not try to enter exactly 16, 24, or 32 characters. Character count does not reliably equal bytes, especially for Unicode, and short passwords remain vulnerable to guessing regardless of the AES key size. Each message uses a fresh random 12-byte IV. New `CT2.` tokens record the key size and authenticate it with the format identifier; decryption selects the recorded size automatically. Older `CT1.` tokens are still decrypted using their original AES-256-GCM format. Web Crypto checks the GCM authentication tag and rejects modified data or an incorrect passphrase without returning plaintext.
+## Text encryption details
 
-AES-GCM is the default because it provides confidentiality and integrity in one widely supported authenticated-encryption mode. It avoids having to compose encryption with a separate MAC, as required by the CBC compatibility mode. Random IVs make collisions extremely unlikely at the app's bounded usage, but randomness is not a mathematical uniqueness guarantee.
+### AES-GCM
 
-### AES-CBC with HMAC (compatibility mode)
+The AES-GCM selector offers **128, 192, and 256 bits**; 256 bits is the default and recommended option. These values describe the derived AES key, **not** the number of passphrase characters. The app normalizes passphrases with Unicode NFKC and derives the selected AES key using PBKDF2-HMAC-SHA-256 with 600,000 iterations and a fresh random 16-byte salt. Each message also gets a fresh random 12-byte IV.
 
-The `CBC1.` mode derives separate AES and HMAC keys from the normalized passphrase and salt. It encrypts with AES-256-CBC and authenticates the format identifier, salt, IV, and ciphertext with HMAC-SHA-256. The app verifies the HMAC before attempting CBC decryption. Use this only when CBC compatibility is needed; AES-GCM is the preferred choice for new messages.
+New messages use the `CT2.` token format. The token records the selected key size, and the format and key size are authenticated as additional data. Decryption reads the size from the token automatically. Older `CT1.` AES-256-GCM tokens remain decryptable. Web Crypto authenticates the ciphertext before plaintext is returned.
 
-### RSA hybrid encryption
+### AES-CBC with HMAC
 
-RSA is not used to encrypt the whole message. For every message, the app generates a random 256-bit AES key and a random 12-byte IV. AES-256-GCM encrypts the message, then RSA-OAEP with SHA-256 encrypts (wraps) the temporary AES key using the recipient's public key. The `RSA1.` token contains the wrapped-key length, wrapped key, IV, and authenticated ciphertext. The matching RSA private key unwraps the AES key and decrypts the message.
+The `CBC1.` compatibility format derives separate AES-256-CBC and HMAC-SHA-256 keys from the normalized passphrase. A fresh random salt and IV are used. The HMAC covers the format identifier, salt, IV, and ciphertext; the app verifies it before attempting CBC decryption. AES-GCM is the preferred choice for new messages.
 
-RSA keys must be 2048–8192 bits. Select **2048**, **3072**, or **4096 bits** under **RSA key size for generated keys** before generating a pair. The selected size applies to both direct and hybrid RSA key pairs generated in the app. 2048 bits is the recommended default for compatibility; larger keys increase key-generation and operation time. Pasted or imported keys keep their own size. Public keys use SPKI `PUBLIC KEY` PEM; private keys use PKCS#8 `PRIVATE KEY` PEM. Before encrypting, compare the displayed SHA-256 public-key fingerprint with the recipient using a separate trusted channel. A matching fingerprint shows that two key copies are identical; it does not prove the owner's identity.
+### RSA Hybrid
 
-### Direct RSA encryption (short messages only)
+RSA Hybrid uses a fresh random 256-bit AES key and 12-byte IV for each message. AES-256-GCM encrypts the message, then RSA-OAEP with SHA-256 wraps the temporary AES key using the recipient's public key. The `RSA1.` token contains the wrapped key, IV, and authenticated ciphertext. The matching RSA private key is required to unwrap the AES key and decrypt.
 
-The direct RSA option encrypts the message itself with RSA-OAEP and SHA-256 and produces an `RSA2.` token. RSA-OAEP has a strict plaintext limit: the maximum is the RSA modulus size in bytes minus 66 bytes for SHA-256 padding. This gives limits of **190 UTF-8 bytes** with a 2048-bit key, **318 bytes** with a 3072-bit key, and **446 bytes** with a 4096-bit key (limits are bytes, not characters). The app checks the encoded message size before encryption and rejects messages that exceed the selected key's limit. Use the hybrid RSA method for longer messages.
+### Direct RSA
 
-### Legacy Grumpy v2
+The `RSA2.` method encrypts the message itself with RSA-OAEP and SHA-256, without AES. Its plaintext limit is the RSA modulus size in bytes minus 66 bytes for OAEP padding. For the selectable generated-key sizes, the maximum plaintext is:
 
-Grumpy v2 encryption and decryption are provided for compatibility with the old format and testing. Its key-derived stream has a very small effective key space, its output is deterministic for the same message and key, some characters pass through unchanged, and ciphertext is not authenticated. It therefore does not provide reliable confidentiality or tamper detection. A wrong key or altered ciphertext can produce plausible-looking but incorrect output without an error. The app permits creating legacy ciphertext, but clearly marks the method insecure. Never use it for new or sensitive information; choose AES-256-GCM instead. This mode accepts any non-empty key for compatibility and does not apply the modern password minimum.
+| RSA key size | Direct RSA maximum |
+| ---: | ---: |
+| 2048 bits | 190 UTF-8 bytes |
+| 3072 bits | 318 UTF-8 bytes |
+| 4096 bits | 446 UTF-8 bytes |
 
-After successfully decrypting a Grumpy v2 message, choose **Prepare AES-256-GCM migration** to move the recovered plaintext into the message field and select AES-GCM. The app clears the legacy access key; enter a new, strong access key and select **Encrypt message** to create a modern authenticated `CT2.` token. This is an explicit migration, not an in-place conversion: the old ciphertext and any copies remain insecure, so replace or securely remove them where practical. Verify the new token by decrypting it with the new access key before relying on it.
-
-### Passphrase and text limits
-
-- Minimum passphrase length for password-based encryption: **10 characters**. This minimum does not measure strength; use a long, unique, preferably randomly generated passphrase.
-- Maximum passphrase size: **4,096 UTF-8 bytes**.
-- Maximum plaintext message: **100,000 UTF-8 bytes**.
-- Maximum encoded message token: **140,000 characters**.
-- Maximum RSA PEM input: **20,000 characters**.
-- Cryptographic formats and PBKDF2 work factors are fixed by the implementation; a token cannot select an arbitrary algorithm or KDF cost.
-
-## Encrypt and decrypt files
-
-File operations always use chunked AES-256-GCM and the **Access key**, regardless of the selected text method. New files use the binary `HWF2` format and support up to **1 GiB of plaintext**. The file is processed in 4 MiB chunks. Each chunk is authenticated; its nonce combines a random per-file prefix with a unique chunk counter, and its authentication data includes the file header and chunk index. The header stores a random salt, nonce prefix, and plaintext byte length. The encrypted file size is visible.
-
-The app also decrypts files made with the earlier `HWF1.` format, which supports plaintext up to **1 MiB**. Original filenames and MIME types are not stored:
-
-- Encrypted file: `encrypted-file.hwf2`
-- Decrypted file: `decrypted-file.bin`
-
-Where supported, the File System Access API writes large outputs incrementally. Other browsers fall back to preparing a Blob download and may require substantial memory. If a streamed decryption fails, the app attempts to abort the output; browser behavior can still leave an incomplete file if an abort fails. Treat downloaded plaintext files as sensitive.
+Limits are measured in UTF-8 **bytes**, not characters. Multi-byte characters use more than one byte. The app checks the encoded length and rejects messages over the selected public key's limit. Use RSA Hybrid for longer content.
 
 ## RSA keys and fingerprints
 
-Select an RSA method to show the key controls.
+When an RSA method is selected, the key controls appear. The generated-key size selector offers **2048, 3072, or 4096 bits**, with 2048 bits selected by default. Larger keys can take longer to generate and use. This selector only applies to key pairs generated in the app; pasted or imported keys keep their own size. Imported RSA keys must be at least 2048 bits and no more than 8192 bits.
 
-- Choose **2048**, **3072**, or **4096 bits** in **RSA key size for generated keys**, then select **Generate selected-size RSA key pair**. This setting applies to generated keys only. 2048 bits is recommended for compatibility; larger sizes can take longer to generate and use.
-- By default, the private key is non-extractable and stays in page memory. The app cannot export or recover it. It is cleared when the privacy lock activates, the page is navigated away from or unloaded, or the page is reloaded.
-- **Exportable PEM** is an explicit alternative for a user-managed backup. The private PEM becomes visible in the page and can be copied. Anyone with it can decrypt messages addressed to that key; store it securely and never share it.
-- Existing PKCS#8 private keys can be imported by pasting their PEM into the private-key field. Public keys can be pasted in SPKI PEM format.
-- A SHA-256 fingerprint is calculated from the canonical SPKI encoding of the current public key. Verify it with the intended recipient over a separate trusted channel before encrypting.
-- Replacing existing RSA key material prompts for confirmation. The app does not retain old private keys, rotate keys automatically, or re-encrypt previous messages.
+Generated keys use RSA-OAEP with SHA-256. Public keys are displayed as SPKI `PUBLIC KEY` PEM; exportable private keys use PKCS#8 `PRIVATE KEY` PEM.
 
-The public key is not secret and is retained after a privacy lock. Private keys are not persisted in browser storage.
+- By default, a generated private key is non-extractable and held only in page memory. It cannot be exported or recovered by the app and is lost when the workspace locks or the page closes/reloads.
+- **Exportable PEM** allows a deliberate, user-managed private-key backup. The private key becomes visible in the page. Anyone who obtains it can decrypt messages addressed to it; store it securely and never share it.
+- Paste a recipient's SPKI public key to encrypt for them. Paste the matching PKCS#8 private key to decrypt, or use a generated in-memory key.
+- The displayed SHA-256 fingerprint is calculated from the canonical SPKI public-key encoding. Compare the complete fingerprint with the intended recipient using a separate trusted channel. A matching fingerprint proves the key copies are identical, not who owns the key.
+- Replacing current RSA key material requires confirmation. The app does not retain old private keys, rotate keys automatically, or re-encrypt prior messages.
 
-## Downloads, privacy, and workspace lock
+RSA encryption does not authenticate the sender, prove a public key's identity by itself, or provide forward secrecy. Fingerprint verification and private-key backup are the user's responsibility.
 
-After successful text encryption, **Download .txt** saves only the encrypted token as `encrypted-message.txt`; it does not include a passphrase or private key. Check that the result is encrypted before sharing or downloading it. Ciphertext from weak passphrases or the insecure legacy format is not made safe by downloading it.
+## File encryption
 
-The app does not intentionally transmit messages, files, passphrases, or private keys to an application server and does not store them in localStorage, sessionStorage, IndexedDB, or cookies. Browser Web Crypto performs the cryptographic operations. Loading the app from a website still requires downloading its same-origin page, scripts, styles, and images; compromised hosting can serve code that exposes data before encryption or after decryption.
+File operations always use the **Access key** and chunked AES-256-GCM, regardless of the selected text method or AES text key-size setting.
 
-Optional narration uses the browser's built-in speech synthesis to explain the selected method and controls. When narration is enabled, changing the RSA key-size selector announces the selected 2048-, 3072-, or 4096-bit size; the RSA method and key-generation guidance also reflect the selected size. Choose English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, or French from the narration-language menu; voice availability and pronunciation depend on the speech voices installed in the browser or operating system. Narration and optional sound effects run locally and do not send message contents or keys to a speech service. Audio features can be disabled with their controls.
+- New encrypted files use the binary `HWF2` format and support up to **1 GiB** of plaintext.
+- Files are processed in **4 MiB chunks**. Every chunk is authenticated. The file header and chunk index are included in authenticated data, and a per-file nonce prefix is combined with a chunk counter.
+- The HWF2 header contains a random salt, nonce prefix, and plaintext length. The encrypted file's approximate size is visible.
+- Files from the earlier `HWF1.` format remain decryptable up to **1 MiB** of plaintext.
+- Original filenames and MIME types are not stored. The default download names are `encrypted-file.hwf2` and `decrypted-file.bin`.
+- Progress is reported during chunked operations. Where supported, files of 64 MiB or larger are saved incrementally using the browser's Save File picker. Other browsers prepare a Blob download and may require substantial memory.
+- The file passphrase must be at least 10 characters. Use a long, unique passphrase; a minimum length is not a strength guarantee.
 
-After five minutes of inactivity, or when the page is being navigated away from or unloaded, the privacy lock clears access keys, private keys, messages, and results, stops narration and sound effects, and disables the workspace until the user continues with a fresh workspace. The RSA public key is retained. Switching to another tab alone does not trigger the page-lifecycle lock. The lock has no password and is not an authentication boundary; clearing JavaScript fields cannot guarantee secure erasure from browser memory.
+If streamed output fails, the app attempts to abort the incomplete save. Browser or filesystem behavior can still leave a partial file if aborting fails. Treat decrypted downloads as sensitive.
 
-## Usage
+## Narration and sound
+
+Narration is optional and uses the browser's built-in speech synthesis. Select a narration language in the header and turn narration on. It follows the selected method and key sizes, explains focused controls, and announces message and file operation outcomes without reading message contents or keys aloud. With narration enabled, selecting an RSA key size announces the chosen 2048-, 3072-, or 4096-bit size; the RSA method and key-generation guidance also reflect that selection.
+
+Available guide languages are **English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, and French**. Spoken voice availability and pronunciation depend on voices installed in the browser or operating system. If the browser has no usable speech voice, narration may be unavailable. Sound effects are optional and controlled separately. These features run locally; message content and keys are not sent to a speech service.
+
+## Quick start
 
 1. Open the app in a modern browser from `localhost` or an HTTPS origin.
-2. Select an encryption method. AES-GCM is the default for passphrase-based messages. Choose 128, 192, or 256 bits in the AES-GCM key-size menu; 256 bits is recommended. This controls the derived AES key, not the number of passphrase characters.
-3. For AES-GCM or CBC-HMAC, enter a long, unique access key. For direct RSA or RSA hybrid, paste and verify the recipient's public-key fingerprint instead. To generate your own RSA key pair, select its size (2048, 3072, or 4096 bits) before generating it; pasted/imported keys are unaffected. Direct RSA is limited to short messages; the access key is still used for files.
-4. Enter a message and select **Encrypt message**. Share the resulting token and the required passphrase or private-key instructions through appropriate separate channels.
-5. To decrypt, paste the complete token into the message field, provide the matching passphrase or private key, and select **Decrypt message**.
-6. For legacy compatibility or testing, Grumpy v2 mode can encrypt a message or decrypt old ciphertext using a non-empty key. This cipher is insecure and does not report a wrong key or modified text reliably; never use it for sensitive messages. To migrate old text, decrypt it first, choose **Prepare AES-256-GCM migration**, enter a new, strong access key, and encrypt the recovered text. Do not reuse a weak legacy key.
-7. Use the file controls to encrypt or decrypt a file with the access key. File encryption is always chunked AES-GCM.
+2. Select an encryption method.
+3. For AES-GCM, optionally choose 128, 192, or 256 bits; this sets the derived AES key size, not passphrase length. For AES-CBC + HMAC, use a long passphrase. For either RSA method, paste and verify a recipient public-key fingerprint or generate a key pair. Choose a generated RSA key size before generating the pair.
+4. Enter the message and select **Encrypt message**. The result is a token with a method-specific prefix. Share the encrypted token and required passphrase or key instructions through appropriate separate channels.
+5. To decrypt, paste the complete token and provide the matching passphrase or private key. The app recognizes `CT2.`, older `CT1.`, `CBC1.`, `RSA1.`, and `RSA2.` text tokens and selects the corresponding method.
+6. Use the file controls to encrypt or decrypt a file with the access key; file operations always use AES-256-GCM.
 
-The message field supports **Ctrl/⌘ + Enter** to encrypt and **Ctrl/⌘ + Shift + Enter** to decrypt. **Clear** clears the current message, result, and selected file; it does not delete downloaded files.
+Grumpy v2 messages do not use the modern token prefixes. Select the legacy method to decrypt old-format text. After successful decryption, **Prepare AES-256-GCM migration** moves the plaintext into the message field and clears the old access key. Enter a new strong passphrase and encrypt to create a modern `CT2.` token. This does not make old ciphertext or its copies secure; remove or replace them where practical.
 
-## Run locally
+Keyboard shortcuts:
 
-Use a modern browser with Web Crypto support. Web Crypto is generally available in secure contexts, including `localhost` and HTTPS. Opening the HTML directly from disk may not provide the required browser APIs.
+- **Ctrl/⌘ + Enter**: encrypt the message.
+- **Ctrl/⌘ + Shift + Enter**: decrypt the message.
 
-No dependency installation or application backend is required. For example, with Python installed, run this command from the project folder:
+**Clear** clears the current message, result, and selected file from the workspace; it does not delete files already downloaded.
+
+## Limits and behavior
+
+| Input | Limit |
+| --- | ---: |
+| Plaintext message | 100,000 UTF-8 bytes |
+| Encoded text token | 140,000 characters |
+| Passphrase for password-based encryption | At least 10 characters; at most 4,096 normalized UTF-8 bytes |
+| RSA PEM input | 20,000 characters |
+| New file plaintext | 1 GiB |
+| Earlier HWF1 file plaintext | 1 MiB |
+
+Direct RSA has an additional key-dependent plaintext limit described above. The application uses fixed token formats, algorithms, and KDF work factors; token data cannot choose an arbitrary algorithm or PBKDF2 iteration count.
+
+## Privacy and workspace lock
+
+The app does not intentionally transmit message contents, files, passphrases, or private keys to an application server. It does not persist them in localStorage, sessionStorage, IndexedDB, or cookies. Cryptographic operations use browser Web Crypto. A deployed website still supplies the HTML, scripts, styles, and images: a compromised hosting origin can deliver code that reads data before encryption or after decryption.
+
+After five minutes of inactivity, or when a page-lifecycle `pagehide` event occurs, the workspace locks. Sensitive message and result fields, passphrases, and private keys are cleared; narration and sound effects stop; controls are disabled until the user resumes with a fresh workspace. The RSA public key is retained. Switching tabs alone does not necessarily trigger the lock. The lock has no password, is not an authentication boundary, and cannot guarantee secure erasure from browser memory.
+
+Text-token downloads contain only the encrypted token. They do not include the passphrase or private key. Check that output is encrypted before downloading or sharing it; downloading legacy ciphertext or ciphertext made with a weak passphrase does not make it safe.
+
+## Run and deploy
+
+### Run locally
+
+No package installation, build step, or application backend is required. Use a modern browser with Web Crypto support. Web Crypto generally requires a secure context, such as `localhost` or HTTPS; opening `index.html` directly from disk may not work.
+
+With Python installed, start a static server in the project directory:
 
 ```powershell
 python -m http.server 8000
 ```
 
-Then open <http://localhost:8000/>. You can also serve the static files with another local HTTP server.
+Then open <http://localhost:8000/>. Any static HTTP server that serves the project files from their existing relative paths can be used.
 
-## Temporary Cloudflare Pages upload
+### Static hosting
 
-The project has been tested and temporarily hosted as a static site on Cloudflare Pages using its direct-upload workflow. This method does not require Git or a build step:
+The app can be deployed as static files. Upload `index.html` at the site root together with the `css/`, `js/`, and `assets/` directories. Do not upload a nested project folder in a way that places the page one directory below the site root. Serve the site over HTTPS from an origin you trust.
 
-1. Sign in to the Cloudflare dashboard at <https://dash.cloudflare.com/>.
-2. Open **Workers & Pages**, select **Create**, choose **Pages**, then choose **Upload assets**.
-3. Enter a Pages project name. Cloudflare uses it for the site's `*.pages.dev` address.
-4. Drag and drop the project folder containing `index.html`, `css/`, `js/`, and `assets/`. Ensure `index.html` is at the top level of the uploaded site—not inside an extra nested `CRYPT/` directory.
-5. Select **Deploy** and wait for Cloudflare to finish publishing the static assets.
-6. Open the provided Pages URL and test the page, encryption/decryption, and browser console. For later changes with direct upload, upload the updated site again.
+For a manual Cloudflare Pages direct upload, create a Pages project, upload the static site assets with `index.html` at the root, deploy, then test the published site and its browser console. Manual uploads do not automatically publish later local changes; upload the updated files again. Treat the deployed site as public and never put secrets or private keys in its files.
 
-This is a temporary/manual deployment workflow; it does not automatically publish later local changes. Treat the Pages URL as a public website: do not add secrets or private keys to the uploaded files. Browser-side encryption protects data only if the code delivered by the hosting origin is trustworthy.
+The page includes a restrictive CSP meta policy. Some protections, especially `frame-ancestors`, must be delivered as HTTP response headers; see [Recommended HTTP security headers](#recommended-http-security-headers).
 
 ## Tests
 
-Tests use Node.js's built-in test runner; no test framework installation is required. Run the complete suite from the project folder:
+The project uses Node.js's built-in test runner and has no test-framework dependency. From the project directory, run:
 
 ```powershell
 node --test tests\crypto.test.mjs tests\errors.test.mjs tests\session-lock.test.mjs tests\security-config.test.mjs tests\workspace-lock-ui.test.mjs tests\audio-guide.test.mjs
 ```
 
-The regression tests cover AES-GCM, CBC-HMAC, direct and hybrid RSA, Grumpy v2 legacy-format encryption/decryption compatibility, HWF1/HWF2 file encryption, tampering, wrong keys, malformed and truncated tokens, RSA key validation and generation, safe error behavior, local-processing policy, UI wiring, narration, and the inactivity lock. Passing tests are not a substitute for an independent cryptographic security audit or testing in the browsers and devices where you intend to use the app.
+The suite covers AES-GCM key sizes and legacy tokens, CBC-HMAC, direct and hybrid RSA, RSA key generation and validation, Grumpy v2 compatibility, HWF1/HWF2 file encryption, tampering and malformed inputs, safe error behavior, local-processing policies, UI wiring, narration, and workspace locking. Passing tests establish expected behavior for tested cases; they are not a substitute for browser testing or an independent cryptographic audit.
 
-The current automated regression suite contains 37 tests. In addition to this suite, the app has been exercised in a browser and temporarily published through Cloudflare Pages direct upload. These checks are useful validation, not a formal security audit or a guarantee that every browser and deployment configuration is defect-free.
-
-## Project structure
+## Project layout
 
 ```text
-index.html
-  Application markup, CSP meta policy, and icon declarations
+index.html                     Application markup and CSP meta policy
 css/
-  styles.css                  Dark purple theme, responsive layout, focus states
+  styles.css                   Responsive interface, theme, focus and status styling
 js/
-  app.js                      UI wiring, encryption flow, downloads, file handling
-  crypto.mjs                  Compatibility re-export for crypto functions
-  errors.mjs                  User-facing error handling and safe diagnostics
-  session-lock.mjs            Testable inactivity timer
+  app.js                       UI wiring, operations, downloads, and lock integration
+  crypto.mjs                   Crypto API re-exports
+  errors.mjs                   User-facing errors and safe diagnostics
+  session-lock.mjs             Testable inactivity timer
   crypto/
-    aes-gcm.mjs               AES-GCM text encryption with 128-, 192-, and 256-bit derived keys
-    aes-cbc-hmac.mjs          AES-CBC with encrypt-then-MAC authentication
+    aes-gcm.mjs                AES-GCM text encryption and CT1 compatibility
+    aes-cbc-hmac.mjs           CBC compatibility with encrypt-then-MAC
     file-aes-gcm.mjs           Chunked HWF2 and legacy HWF1 file formats
-    rsa-hybrid.mjs             Direct and hybrid RSA-OAEP encryption and key management
-    legacy.mjs                 Grumpy v2 legacy-format encryption/decryption
+    rsa-hybrid.mjs             Direct/hybrid RSA-OAEP, PEM keys, and fingerprints
+    legacy.mjs                 Grumpy v2 compatibility cipher
     pem.mjs                    RSA PEM parsing and formatting
-    shared.mjs                 Encoding, limits, KDF parameters, token helpers
+    shared.mjs                 Encodings, limits, KDF settings, and token helpers
   ui/
-    audio.mjs                  Sound effects and narration
-    workspace-lock.mjs         Privacy lock and page lifecycle behavior
+    audio.mjs                  Narration, language guides, and sound effects
+    workspace-lock.mjs         Inactivity and page-lifecycle privacy lock
 assets/
-  hex-watch.svg                Scalable app and favicon mark
-  hex-watch-project.png        PNG favicon, touch icon, and project image
+  hex-watch.svg                SVG logo and favicon
+  hex-watch-project.png        PNG app icon
 tests/
-  *.test.mjs                   Crypto, UI, security-policy, and lifecycle tests
-README.md
-  Project documentation and security guidance
+  audio-guide.test.mjs         Narration behavior and language guides
+  crypto.test.mjs              Text, RSA, file, and legacy crypto tests
+  errors.test.mjs              Error mapping and safe diagnostics
+  security-config.test.mjs     CSP, local-processing, and UI policy tests
+  session-lock.test.mjs        Inactivity timer tests
+  workspace-lock-ui.test.mjs   Workspace lock integration tests
 ```
 
 ## Security model and limitations
 
-Hex Watch Cipher helps protect encrypted token contents from someone who obtains a token but does not have the required passphrase or private key, assuming correct Web Crypto behavior, sound randomness, and an uncompromised browser and device. It is not a complete secure communications system.
+Hex Watch Cipher can protect encrypted text and file contents from someone who has only the token or encrypted file, provided the cryptography, randomness, browser, device, and delivered application code are trustworthy. It is not a complete secure communications system.
 
-- **Endpoint and code integrity:** Malware, a malicious extension, an unlocked device, compromised hosting, or modified application code may expose plaintext and keys.
-- **Passphrase guessing:** PBKDF2 increases the cost of guesses but cannot compensate for a weak or reused passphrase. The 10-character minimum is not a strength score.
-- **Metadata:** Token prefixes, formats, and approximate message/file sizes are visible.
-- **Identity and secrecy properties:** Password encryption does not establish who created a message. RSA hybrid encryption does not sign messages. The app provides no forward secrecy, contact verification service, recovery service, or automatic key archival.
-- **Key loss:** Losing a passphrase or a non-extractable private key can make messages unrecoverable. Exported private keys require secure user-managed backups.
-- **Privacy lock:** It is intended to reduce casual viewing, not authenticate users or securely erase browser memory.
-- **Legacy cipher:** Grumpy v2 encryption/decryption is available for compatibility/testing but is insecure and must not be used for sensitive data.
-- **Operation duration:** Input sizes are bounded, but Web Crypto operations such as PBKDF2 cannot be reliably cancelled once started; the app does not promise a hard operation timeout.
-- **Independent review:** Automated tests validate expected behavior, not the absence of every implementation or cryptographic defect. This project has not been independently audited.
+- **Endpoint and code integrity:** Malware, a malicious browser extension, an unlocked device, compromised hosting, or modified application code can expose plaintext or keys.
+- **Passphrase guessing:** PBKDF2 makes guesses more expensive but cannot rescue a weak or reused passphrase. The 10-character minimum is not a strength score.
+- **Metadata:** Token prefixes, formats, and approximate message or file sizes remain visible.
+- **Identity and signatures:** Password encryption does not establish who created a message. RSA hybrid encryption does not sign messages; verify public-key fingerprints independently.
+- **Forward secrecy:** The app does not provide forward secrecy, key rotation, automatic key archival, or key recovery.
+- **Key loss:** A lost passphrase or non-extractable private key can make data unrecoverable. Exportable private-key backups require secure user-managed storage.
+- **Privacy lock:** The lock reduces casual exposure but is not authentication and does not securely erase browser memory.
+- **Legacy mode:** Grumpy v2 is insecure and must not be used for sensitive information.
+- **Availability:** Input sizes are bounded, but Web Crypto operations such as PBKDF2 cannot be reliably cancelled once started. The app does not guarantee a hard operation timeout.
+- **Audit status:** Automated tests validate expected behavior, not the absence of all defects. This project has not been independently audited.
 
-## Deployment headers
+## Recommended HTTP security headers
 
-For public hosting, serve the application over HTTPS from a trusted origin. The HTML includes a restrictive CSP meta policy, but response headers should also be configured by the host. In particular, `frame-ancestors` is effective only as an HTTP response header, not in a meta CSP. Send and verify headers such as:
+Serve the app over HTTPS from a trusted origin. The page includes a CSP meta policy, but configure response headers at the host as well. In particular, `frame-ancestors` only works in a CSP response header, not in a meta element.
+
+Example response headers:
 
 ```text
 Content-Security-Policy: default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self'; font-src 'self'; media-src 'none'; connect-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'
@@ -215,6 +244,6 @@ Referrer-Policy: no-referrer
 X-Frame-Options: DENY
 ```
 
-Keep scripts, styles, images, and fonts same-origin. Do not add inline scripts/styles, third-party assets, or remote dependencies without reviewing the CSP and privacy impact. After deployment, inspect the actual response headers and Network panel in browser developer tools. Initial same-origin asset requests are expected; encrypt/decrypt operations themselves should not initiate network requests.
+Keep scripts, styles, images, and fonts same-origin. Review the privacy and CSP impact before adding inline code, remote dependencies, or third-party assets. After deployment, inspect the actual response headers and Network panel in your browser. Initial same-origin asset requests are expected; encrypt/decrypt operations themselves should not initiate network requests.
 
-For Cloudflare Pages static direct uploads, response headers can be configured with a plain-text `_headers` file placed in the uploaded site's root, then included in the upload. Cloudflare applies these rules to static asset responses; if using Pages Functions or a Worker later, configure headers in that runtime instead. Confirm the published HTML response actually includes the intended headers after deployment.
+For Cloudflare Pages, response headers can be configured in a plain-text `_headers` file at the uploaded site's root. If deploying through Pages Functions or a Worker, configure headers in that runtime instead. Verify the published HTML response contains the intended headers.

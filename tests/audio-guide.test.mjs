@@ -8,12 +8,12 @@ import {
 } from '../js/ui/audio.mjs';
 
 const expectedModes = {
-  aes: ['CT2', 'access key', 'Decrypt message'],
-  cbc: ['CBC1', 'authentication', 'Decrypt message'],
-  rsa: ['RSA1', 'fingerprint', 'private key'],
-  hybrid: ['RSA1', 'AES-256-GCM', 'private key'],
-  'rsa-direct': ['RSA2', '190 UTF-8 bytes', 'hybrid RSA'],
-  legacy: ['Grumpy v2', 'Encrypt message', 'Decrypt message']
+  aes: ['passphrase-based', 'CT2', 'access key'],
+  cbc: ['compatibility method', 'CBC1', 'authentication'],
+  rsa: ['compatibility entry', 'RSA1', 'private key'],
+  hybrid: ['recommended public-key method', 'RSA1', 'private key'],
+  'rsa-direct': ['RSA-OAEP direct encryption', 'RSA2', '190 UTF-8 bytes'],
+  legacy: ['legacy-only method', 'Grumpy v2', 'insecure']
 };
 
 test('narration has a distinct how-it-works and usage guide for every encryption method', () => {
@@ -130,8 +130,26 @@ test('active narration switches immediately to the guide for the newly selected 
     controller.setNarrationMode('rsa');
     assert.match(utterances.at(-1).text, /AES-256-GCM key/);
     assert.match(utterances.at(-1).text, /4096-bit RSA/);
+    controller.setNarrationMode('rsa-direct');
+    documentListeners.get('focusin')({
+      target: { closest: () => ({ tagName: 'INPUT', id: 'key' }) }
+    });
+    assert.match(utterances.at(-1).text, /access key is not used/i);
+    documentListeners.get('focusin')({
+      target: { closest: () => ({ tagName: 'TEXTAREA', id: 'rsaPrivate' }) }
+    });
+    assert.match(utterances.at(-1).text, /decrypt RSA messages, including direct and hybrid RSA tokens/i);
+    documentListeners.get('focusin')({
+      target: { closest: () => ({ tagName: 'BUTTON', id: 'fileEncrypt' }) }
+    });
+    assert.match(utterances.at(-1).text, /chunked AES-256-GCM/i);
+    assert.doesNotMatch(utterances.at(-1).text, /RSA Hybrid is the recommended/);
+    documentListeners.get('focusin')({
+      target: { closest: () => ({ tagName: 'BUTTON', id: 'sfxB' }) }
+    });
+    assert.match(utterances.at(-1).text, /optional interface sounds/i);
     controller.setNarrationMode('legacy');
-    assert.match(utterances.at(-1).text, /Grumpy v2 encryption and decryption are available/);
+    assert.match(utterances.at(-1).text, /Grumpy v2 is a legacy-only method and is cryptographically insecure/);
     assert.equal(elements.get('ntext').textContent, `"${utterances.at(-1).text}"`);
     controller.reset();
     rsaSizeSelect.value = '2048';
@@ -209,6 +227,10 @@ test('changing the narration language updates active speech and its speech-synth
     elementListeners.get(languageSelect).get('change')();
     assert.equal(utterances.at(-1).lang, 'ig-NG');
     assert.match(utterances.at(-1).text, /Usoro izochi ozi ị họọrọ/);
+    controller.announceStatus('fileFailed');
+    assert.equal(utterances.at(-1).lang, 'ig-NG');
+    assert.match(utterances.at(-1).text, /Ọrụ faịlụ ahụ emeghị nke ọma/);
+    assert.equal(controller.announceStatus('unknown-event'), false);
 
     languageSelect.value = 'fr';
     elementListeners.get(languageSelect).get('change')();
@@ -313,6 +335,9 @@ test('narration explains focused controls and selected-method benefits while ena
     focusin({ target: control('migrateLegacy') });
     assert.match(utterances.at(-1).text, /Prepare AES-GCM migration button/);
     assert.match(utterances.at(-1).text, /clears the old passphrase/);
+    document.getElementById('fileStatus').textContent = 'Unable to decrypt this message.';
+    focusin({ target: control('fileStatus') });
+    assert.match(utterances.at(-1).text, /Unable to decrypt this message/);
     assert.ok(utterances.length > previousCount);
     controller.reset();
     assert.equal(documentListeners.has('focusin'), true);

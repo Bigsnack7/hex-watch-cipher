@@ -81,10 +81,10 @@ function refresh(){
   const aesKeyBits=Number($('aesKeySize').value);
   const descriptions={
     aes:[`Authenticated AES-${aesKeyBits}-GCM with PBKDF2-SHA-256. Each message gets a random salt and IV.`,`AES-${aesKeyBits}-GCM · PBKDF2-SHA-256 · 600,000 iterations · Tamper detection`],
-    cbc:['Compatibility option. AES-256-CBC uses a separate HMAC-SHA-256 key and verifies the authentication tag before decryption. Prefer AES-256-GCM for new messages.','AES-256-CBC + HMAC-SHA-256 · Compatibility only · Encrypt-then-MAC'],
-    'rsa-direct':['Direct RSA-OAEP-SHA-256 encryption. The default 2048-bit key supports messages up to 190 UTF-8 bytes. Use hybrid RSA for longer messages.','Direct RSA-OAEP-SHA-256 · 190 UTF-8 bytes maximum with RSA-2048 · Short messages only'],
+    cbc:['Compatibility option. AES-256-CBC uses a separate HMAC-SHA-256 key and verifies the authentication tag before decryption. Prefer AES-256-GCM for new messages.','AES-256-CBC with HMAC-SHA-256 · Encrypt-then-MAC · Compatibility'],
+    'rsa-direct':['Direct RSA-OAEP-SHA-256 encryption. The default 2048-bit key supports messages up to 190 UTF-8 bytes. Use hybrid RSA for longer messages.','RSA-OAEP-SHA-256 · Direct encryption · 190 UTF-8 bytes maximum with RSA-2048'],
     rsa:['Hybrid encryption: RSA-OAEP-SHA-256 protects a random AES-256-GCM key. Generate a pair or paste a recipient public key.','RSA-OAEP-SHA-256 · Minimum 2048-bit keys · AES-256-GCM'],
-    hybrid:['Hybrid encryption: a random AES-256-GCM key encrypts the message; RSA-OAEP-SHA-256 wraps that key for the recipient. Uses the compatible RSA1 token format.','Hybrid AES-256-GCM + RSA-OAEP-SHA-256 · Minimum 2048-bit keys · RSA1 compatible'],
+    hybrid:['Hybrid encryption: a random AES-256-GCM key encrypts the message; RSA-OAEP-SHA-256 wraps that key for the recipient. Uses the RSA1 token format.','AES-256-GCM + RSA-OAEP-SHA-256 · Hybrid encryption · RSA1 format'],
     legacy:['WARNING: Grumpy v2 encryption and decryption are available only for legacy compatibility and testing. It is cryptographically insecure, provides no reliable confidentiality or tamper detection, and must never protect sensitive data. Use AES-256-GCM instead.','Grumpy v2 · Legacy encryption/decryption · INSECURE']
   };
   $('modeHint').textContent=descriptions[selected][0];
@@ -164,11 +164,13 @@ async function run(dec){
       $('legacyMigration').hidden=false;
     }
     audio.play(dec?'decrypt':'encrypt');show(r);
+    audio.announceStatus(dec?'messageDecrypted':'messageEncrypted');
   }catch(e){
     if(locked||generation!==operationGeneration)return;
     setMessageDownload(null);
     logCryptoFailure(e,dec);
     show(getUserErrorMessage(e,dec,MSG),1);
+    audio.announceStatus('operationFailed');
   }finally{busy(false)}
 }
 async function runFile(decrypting){
@@ -243,6 +245,7 @@ async function runFile(decrypting){
     fileStatus.textContent=decrypting
       ?`Decrypted file saved as ${suggestedName}. The original filename and type are not recoverable.`
       :`Encrypted file saved as ${suggestedName}. The original filename and type are not included.`;
+    audio.announceStatus(decrypting?'fileDecrypted':'fileEncrypted');
   }catch(error){
     const stale=locked||generation!==operationGeneration;
     let cleanupFailed=false;
@@ -260,17 +263,20 @@ async function runFile(decrypting){
     if(stale)return;
     if(error.name==='AbortError'&&!cleanupFailed){
       fileStatus.textContent='File save was cancelled.';
+      audio.announceStatus('fileCancelled');
       return;
     }
     logCryptoFailure(error,decrypting);
     if(cleanupFailed)return;
     fileStatus.textContent=error.message==='fileformat'?MSG.fileformat:getUserErrorMessage(error,decrypting,MSG);
     fileStatus.classList.add('error');
+    audio.announceStatus('fileFailed');
   }finally{busy(false)}
 }
 function downloadMessageToken(){
   if(!lastEncryptedToken)return;
   triggerDownload(new Blob([lastEncryptedToken],{type:'text/plain;charset=utf-8'}),'encrypted-message.txt');
+  setTimeout(()=>audio.announceStatus('tokenDownloaded'),0);
 }
 async function generateRsa(){
   const button=$('generateRsa');button.disabled=true;
@@ -295,9 +301,11 @@ async function generateRsa(){
     show(exportable
       ?'Exportable RSA key pair generated. Store the private-key backup securely before relying on this key.'
       :'Non-extractable RSA key pair generated in memory. It cannot be backed up by this app and will be lost on lock, page close, or reload.',false);
+    audio.announceStatus('rsaKeyGenerated');
   }catch(e){
     if(locked||generation!==operationGeneration)return;
     show(e.message==='nocrypto'?MSG.nocrypto:'Could not generate the RSA key pair. Check browser support and try again.',true);
+    audio.announceStatus('rsaKeyFailed');
   }finally{button.disabled=locked}
 }
 function updateRsaKeySummary(){
@@ -352,6 +360,7 @@ async function copyKey(field,label){
   if(!value){show(`No ${label} is available to copy.`,true);return}
   const copied=await copyText(value,field);
   show(copied?`${label} copied to the clipboard.`:`Copy failed. The ${label} text is selected for manual copying.`,!copied);
+  audio.announceStatus(copied?'keyCopied':'copyFailed');
 }
 let copyFeedbackTimer=null;
 function flash(t){
@@ -396,6 +405,7 @@ async function copy(){
   audio.play('blip');
   const copied=await copyText(t,out);
   flash(copied?'Copied!':'Copy failed');
+  audio.announceStatus(copied?'outputCopied':'copyFailed');
 }
 
 function clearSensitiveWorkspace(){
@@ -429,7 +439,7 @@ function clearSensitiveWorkspace(){
 /* ================= Wiring ================= */
 encB.addEventListener('click',()=>run(false));
 decB.addEventListener('click',()=>run(true));
-clrB.addEventListener('click',()=>{audio.play('blip');inp.value='';fileInput.value='';$('fileStatus').textContent='';$('fileStatus').classList.remove('error');clearLegacyMigration();setMessageDownload(null);show(EMPTY);inp.focus()});
+clrB.addEventListener('click',()=>{audio.play('blip');inp.value='';fileInput.value='';$('fileStatus').textContent='';$('fileStatus').classList.remove('error');clearLegacyMigration();setMessageDownload(null);show(EMPTY);inp.focus();setTimeout(()=>audio.announceStatus('workspaceCleared'),0)});
 copyB.addEventListener('click',copy);
 downloadTokenB.addEventListener('click',downloadMessageToken);
 fileEncryptB.addEventListener('click',()=>runFile(false));

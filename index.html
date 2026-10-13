@@ -46,12 +46,12 @@
       <div class="field">
         <label for="mode">Encryption method</label>
         <select id="mode">
-          <option value="aes">AES-GCM · Password-based (Recommended)</option>
+          <option value="aes">AES-GCM · Passphrase-based (Recommended)</option>
           <option value="cbc">AES-CBC + HMAC · Compatibility</option>
-          <option value="rsa-direct">RSA · Short messages only</option>
-          <option value="rsa">RSA Hybrid · RSA1-compatible</option>
-          <option value="hybrid">RSA Hybrid · Recommended public-key method</option>
-          <option value="legacy">Grumpy v2 · Legacy (Insecure)</option>
+          <option value="rsa-direct">RSA-OAEP · Direct encryption (short messages)</option>
+          <option value="rsa">RSA Hybrid · RSA1 format (compatibility)</option>
+          <option value="hybrid">RSA Hybrid · Recommended</option>
+          <option value="legacy">Grumpy v2 · Legacy only (Insecure)</option>
         </select>
         <span class="field-hint" id="modeHint">Authenticated encryption with a random salt and IV for each message.</span>
       </div>
@@ -62,7 +62,7 @@
           <option value="192">192 bits · 24-byte key</option>
           <option value="256" selected>256 bits · 32-byte key · Recommended</option>
         </select>
-        <span class="field-hint">This selects the derived AES key size, not the number of characters in your passphrase. Keep using a long, unique passphrase; Unicode characters do not equal bytes. The encrypted token records its key size and decrypts automatically.</span>
+        <span class="field-hint" id="aesKeySizeHint">This selects the derived AES key size, not the number of characters in your passphrase. Keep using a long, unique passphrase; Unicode characters do not equal bytes. The encrypted token records its key size and decrypts automatically.</span>
       </div>
       <div class="field" id="passphraseField">
         <label for="key">Access key</label>
@@ -148,7 +148,7 @@
       <div class="narr" id="narr"><b>Narration</b><i id="ntext">Off</i></div>
     </aside>
   </div>
-  <footer class="footer">AES-GCM · AES-CBC + HMAC · RSA-OAEP hybrid encryption · PBKDF2-SHA-256. Keep passphrases and any exported RSA private-key backups safe; this app has no recovery service.</footer>
+  <footer class="footer">AES-GCM · AES-CBC with HMAC · RSA-OAEP hybrid encryption · PBKDF2-HMAC-SHA-256. Keep passphrases and any exported RSA private-key backups safe; this app has no recovery service.</footer>
 </main>
 <section class="lock-screen" id="lockScreen" role="dialog" aria-modal="true" aria-labelledby="lockTitle" hidden>
   <div class="lock-panel">
