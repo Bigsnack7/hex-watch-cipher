@@ -18,9 +18,10 @@ const $=id=>document.getElementById(id);
 const inp=$('inp'),key=$('key'),out=$('out'),mode=$('mode'),status=$('status'),
   encB=$('encB'),decB=$('decB'),clrB=$('clrB'),copyB=$('copy'),
   rsaPublic=$('rsaPublic'),rsaPrivate=$('rsaPrivate'),card=$('card'),lockScreen=$('lockScreen'),
-  fileInput=$('fileInput'),fileEncryptB=$('fileEncrypt'),fileDecryptB=$('fileDecrypt'),downloadTokenB=$('downloadToken');
+  fileInput=$('fileInput'),fileEncryptB=$('fileEncrypt'),fileDecryptB=$('fileDecrypt'),downloadTokenB=$('downloadToken'),
+  hashInput=$('hashInput'),hashDropzone=$('hashDropzone'),hashSelected=$('hashSelected'),hashOutput=$('hashOutput');
 const subtle=window.crypto&&crypto.subtle;
-let locked=false,operationGeneration=0,operationBusy=false;
+let locked=false,operationGeneration=0,operationBusy=false,hashGeneration=0;
 let lastEncryptedToken=null;
 let legacyMigrationText=null;
 let fingerprintTimer=null,fingerprintGeneration=0;
@@ -65,6 +66,11 @@ function setMessageDownload(token){
   lastEncryptedToken=token;
   updateActionButtons();
 }
+function invalidateMessageResult(){
+  setMessageDownload(null);
+  clearLegacyMigration();
+  show(EMPTY);
+}
 function clearLegacyMigration(){
   legacyMigrationText=null;
   $('legacyMigration').hidden=true;
@@ -79,6 +85,213 @@ function triggerDownload(blob,filename){
   anchor.click();
   setTimeout(()=>anchor.remove(),0);
   setTimeout(()=>URL.revokeObjectURL(url),60_000);
+}
+function bytesToHex(bytes){
+  return Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('').toLowerCase();
+}
+function md5Bytes(buffer){
+  const input=new Uint8Array(buffer);
+  const words=[];
+  for(let i=0;i<input.length;i+=4){
+    words.push(
+      ((input[i] || 0) & 0xff) |
+      (((input[i + 1] || 0) & 0xff) << 8) |
+      (((input[i + 2] || 0) & 0xff) << 16) |
+      (((input[i + 3] || 0) & 0xff) << 24)
+    );
+  }
+  const bitLength=input.length * 8;
+  words[bitLength >>> 5] |= 0x80 << (bitLength % 32);
+  words[(((bitLength + 64) >>> 9) << 4) + 14] = bitLength;
+
+  let a=1732584193;
+  let b=-271733879;
+  let c=-1732584194;
+  let d=271733878;
+  const FF=(aa,bb_,cc_,dd_,x,s,t)=>{
+    const n=(aa + ((bb_ & cc_) | (~bb_ & dd_)) + (x >>> 0) + t) | 0;
+    return (((n << s) | (n >>> (32 - s))) + bb_) | 0;
+  };
+  const GG=(aa,bb_,cc_,dd_,x,s,t)=>{
+    const n=(aa + ((bb_ & dd_) | (cc_ & ~dd_)) + (x >>> 0) + t) | 0;
+    return (((n << s) | (n >>> (32 - s))) + bb_) | 0;
+  };
+  const HH=(aa,bb_,cc_,dd_,x,s,t)=>{
+    const n=(aa + (bb_ ^ cc_ ^ dd_) + (x >>> 0) + t) | 0;
+    return (((n << s) | (n >>> (32 - s))) + bb_) | 0;
+  };
+  const II=(aa,bb_,cc_,dd_,x,s,t)=>{
+    const n=(aa + (cc_ ^ (bb_ | ~dd_)) + (x >>> 0) + t) | 0;
+    return (((n << s) | (n >>> (32 - s))) + bb_) | 0;
+  };
+
+  for(let i=0;i<words.length;i += 16){
+    const aa=a,bb_=b,cc_=c,dd_=d;
+    a=FF(a,b,c,d,words[i+0],7,-680876936);
+    d=FF(d,a,b,c,words[i+1],12,-389564586);
+    c=FF(c,d,a,b,words[i+2],17,606105819);
+    b=FF(b,c,d,a,words[i+3],22,-1044525330);
+    a=FF(a,b,c,d,words[i+4],7,-176418897);
+    d=FF(d,a,b,c,words[i+5],12,1200080426);
+    c=FF(c,d,a,b,words[i+6],17,-1473231341);
+    b=FF(b,c,d,a,words[i+7],22,-45705983);
+    a=FF(a,b,c,d,words[i+8],7,1770035416);
+    d=FF(d,a,b,c,words[i+9],12,-1958414417);
+    c=FF(c,d,a,b,words[i+10],17,-42063);
+    b=FF(b,c,d,a,words[i+11],22,-1990404162);
+    a=FF(a,b,c,d,words[i+12],7,1804603682);
+    d=FF(d,a,b,c,words[i+13],12,-40341101);
+    c=FF(c,d,a,b,words[i+14],17,-1502002290);
+    b=FF(b,c,d,a,words[i+15],22,1236535329);
+
+    a=GG(a,b,c,d,words[i+1],5,-165796510);
+    d=GG(d,a,b,c,words[i+6],9,-1069501632);
+    c=GG(c,d,a,b,words[i+11],14,643717713);
+    b=GG(b,c,d,a,words[i+0],20,-373897302);
+    a=GG(a,b,c,d,words[i+5],5,-701558691);
+    d=GG(d,a,b,c,words[i+10],9,38016083);
+    c=GG(c,d,a,b,words[i+15],14,-660478335);
+    b=GG(b,c,d,a,words[i+4],20,-405537848);
+    a=GG(a,b,c,d,words[i+9],5,568446438);
+    d=GG(d,a,b,c,words[i+14],9,-1019803690);
+    c=GG(c,d,a,b,words[i+3],14,-187363961);
+    b=GG(b,c,d,a,words[i+8],20,1163531501);
+    a=GG(a,b,c,d,words[i+13],5,-1444681467);
+    d=GG(d,a,b,c,words[i+2],9,-51403784);
+    c=GG(c,d,a,b,words[i+7],14,1735328473);
+    b=GG(b,c,d,a,words[i+12],20,-1926607734);
+
+    a=HH(a,b,c,d,words[i+5],4,-378558);
+    d=HH(d,a,b,c,words[i+8],11,-2022574463);
+    c=HH(c,d,a,b,words[i+11],16,1839030562);
+    b=HH(b,c,d,a,words[i+14],23,-35309556);
+    a=HH(a,b,c,d,words[i+1],4,-1530992060);
+    d=HH(d,a,b,c,words[i+4],11,1272893353);
+    c=HH(c,d,a,b,words[i+7],16,-155497632);
+    b=HH(b,c,d,a,words[i+10],23,-1094730640);
+    a=HH(a,b,c,d,words[i+13],4,681279174);
+    d=HH(d,a,b,c,words[i+0],11,-358537222);
+    c=HH(c,d,a,b,words[i+3],16,-722521979);
+    b=HH(b,c,d,a,words[i+6],23,76029189);
+    a=HH(a,b,c,d,words[i+9],4,-640364487);
+    d=HH(d,a,b,c,words[i+12],11,-421815835);
+    c=HH(c,d,a,b,words[i+15],16,530742520);
+    b=HH(b,c,d,a,words[i+2],23,-995338651);
+
+    a=II(a,b,c,d,words[i+0],6,-198630844);
+    d=II(d,a,b,c,words[i+7],10,1126891415);
+    c=II(c,d,a,b,words[i+14],15,-1416354905);
+    b=II(b,c,d,a,words[i+5],21,-57434055);
+    a=II(a,b,c,d,words[i+12],6,1700485571);
+    d=II(d,a,b,c,words[i+3],10,-1894986606);
+    c=II(c,d,a,b,words[i+10],15,-1051523);
+    b=II(b,c,d,a,words[i+1],21,-2054922799);
+    a=II(a,b,c,d,words[i+8],6,1873313359);
+    d=II(d,a,b,c,words[i+15],10,-30611744);
+    c=II(c,d,a,b,words[i+6],15,-1560198380);
+    b=II(b,c,d,a,words[i+13],21,1309151649);
+    a=II(a,b,c,d,words[i+4],6,-145523070);
+    d=II(d,a,b,c,words[i+11],10,-1120210379);
+    c=II(c,d,a,b,words[i+2],15,718787259);
+    b=II(b,c,d,a,words[i+9],21,-343485551);
+
+    a=(a + aa) | 0;
+    b=(b + bb_) | 0;
+    c=(c + cc_) | 0;
+    d=(d + dd_) | 0;
+  }
+
+  const digestBytes=new Uint8Array(16);
+  const out=[a >>> 0, b >>> 0, c >>> 0, d >>> 0];
+  for(let i=0;i<4;i++){
+    for(let j=0;j<4;j++){
+      digestBytes[i * 4 + j] = (out[i] >>> (j * 8)) & 0xff;
+    }
+  }
+  return digestBytes;
+}
+async function computeFileHash(file,algorithm){
+  const buffer=await file.arrayBuffer();
+  switch(algorithm){
+    case 'md5':
+      return bytesToHex(md5Bytes(buffer));
+    case 'sha1':
+      return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-1',buffer)));
+    case 'sha256':
+      return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer)));
+    case 'sha512':
+      return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-512',buffer)));
+    default:
+      throw new Error(`Unsupported hash algorithm: ${algorithm}`);
+  }
+}
+function setHashMessage(text,isError=false){
+  hashOutput.innerHTML='';
+  const message=document.createElement('p');
+  message.className=`hash-message${isError?' error':''}`;
+  message.textContent=text;
+  hashOutput.appendChild(message);
+}
+function clearHashWorkspace(){
+  hashGeneration++;
+  hashInput.value='';
+  hashSelected.textContent='No file chosen';
+  hashOutput.replaceChildren();
+}
+async function handleHashFileSelect(fileList,announce=true){
+  const generation=++hashGeneration;
+  const files=[...fileList || []];
+  if(!files.length){
+    hashSelected.textContent='No file chosen';
+    setHashMessage('Choose a file to calculate its hash value.');
+    if(announce)audio.announceStatus('hashFailed');
+    return;
+  }
+  const algorithms=[...document.querySelectorAll('input[name="hashAlgorithm"]:checked')].map(input=>input.value);
+  if(!algorithms.length){
+    hashSelected.textContent=`${files.length} file${files.length > 1 ? 's' : ''} selected`;
+    setHashMessage('Select at least one hash algorithm.', true);
+    if(announce)audio.announceStatus('hashFailed');
+    return;
+  }
+  hashSelected.textContent=files.length === 1 ? files[0].name : `${files.length} files selected`;
+  hashOutput.innerHTML='';
+  if(announce)audio.announceStatus('hashSelected');
+  let encounteredError=false;
+  for(const file of files){
+    const item=document.createElement('article');
+    item.className='hash-file-result';
+    const title=document.createElement('h3');
+    title.textContent=file.name;
+    const list=document.createElement('ul');
+    list.className='hash-value-list';
+    for(const algorithm of algorithms){
+      const row=document.createElement('li');
+      row.className='hash-value-row';
+      const label=document.createElement('span');
+      label.textContent=algorithm.toUpperCase();
+      const value=document.createElement('code');
+      value.textContent='Calculating…';
+      row.appendChild(label);
+      row.appendChild(value);
+      list.appendChild(row);
+      try{
+        value.textContent=await computeFileHash(file,algorithm);
+        if(generation!==hashGeneration)return;
+      }catch(error){
+        if(generation!==hashGeneration)return;
+        encounteredError=true;
+        value.textContent='Unavailable';
+        row.style.color='var(--danger)';
+      }
+    }
+    item.appendChild(title);
+    item.appendChild(list);
+    hashOutput.appendChild(item);
+  }
+  if(announce){
+    audio.announceStatus(encounteredError?'hashFailed':'hashCalculated');
+  }
 }
 function refresh(){
   const selected=mode.value;
@@ -186,7 +399,7 @@ async function run(dec){
       legacyMigrationText=r;
       $('legacyMigration').hidden=false;
     }
-    audio.play(dec?'decrypt':'encrypt');show(r);
+    show(r);
     audio.announceStatus(dec?'messageDecrypted':'messageEncrypted');
   }catch(e){
     if(locked||generation!==operationGeneration)return;
@@ -307,6 +520,7 @@ async function generateRsa(){
   if(locked||operationBusy)return;
   const hasCurrentKey=rsaPrivateCryptoKey||rsaPrivate.value.trim()||rsaPublic.value.trim();
   if(hasCurrentKey&&!confirm('Replace the current RSA key material? Messages encrypted to the current key will not decrypt with the new key. If its private key is non-extractable and not otherwise backed up, it cannot be recovered. Continue?'))return;
+  invalidateMessageResult();
   busy(true,'Generating RSA key pair');
   const generation=operationGeneration;
   try{
@@ -428,7 +642,6 @@ async function copyText(text,target){
 async function copy(){
   const t=out.textContent;
   if(!t||t===EMPTY||out.classList.contains('err'))return;
-  audio.play('blip');
   const copied=await copyText(t,out);
   flash(copied?'Copied!':'Copy failed');
   audio.announceStatus(copied?'outputCopied':'copyFailed');
@@ -451,6 +664,7 @@ function clearSensitiveWorkspace(){
   fileInput.value='';
   $('fileStatus').textContent='';
   $('fileStatus').classList.remove('error');
+  clearHashWorkspace();
   clearLegacyMigration();
   setMessageDownload(null);
   show(EMPTY);
@@ -465,18 +679,54 @@ function clearSensitiveWorkspace(){
 /* ================= Wiring ================= */
 encB.addEventListener('click',()=>run(false));
 decB.addEventListener('click',()=>run(true));
-clrB.addEventListener('click',()=>{audio.play('blip');inp.value='';fileInput.value='';$('fileStatus').textContent='';$('fileStatus').classList.remove('error');clearLegacyMigration();setMessageDownload(null);show(EMPTY);inp.focus();setTimeout(()=>audio.announceStatus('workspaceCleared'),0)});
+clrB.addEventListener('click',()=>{inp.value='';fileInput.value='';$('fileStatus').textContent='';$('fileStatus').classList.remove('error');clearHashWorkspace();clearLegacyMigration();setMessageDownload(null);show(EMPTY);inp.focus();setTimeout(()=>audio.announceStatus('workspaceCleared'),0)});
 copyB.addEventListener('click',copy);
 downloadTokenB.addEventListener('click',downloadMessageToken);
 fileEncryptB.addEventListener('click',()=>runFile(false));
 fileDecryptB.addEventListener('click',()=>runFile(true));
 fileInput.addEventListener('change',()=>{$('fileStatus').textContent='';$('fileStatus').classList.remove('error');updateActionButtons()});
-mode.addEventListener('change',()=>{clearLegacyMigration();show(EMPTY);refresh()});
-$('aesKeySize').addEventListener('change',()=>{clearLegacyMigration();show(EMPTY);refresh()});
+hashInput.addEventListener('change',event=>handleHashFileSelect(event.target.files));
+for(const hashField of document.querySelectorAll('input[name="hashAlgorithm"]')){
+  hashField.addEventListener('change',()=>{
+    audio.announceHashAlgorithm(hashField.value,hashField.checked);
+    if(hashInput.files && hashInput.files.length){
+      handleHashFileSelect(hashInput.files,false);
+    }
+  });
+}
+hashDropzone.addEventListener('click',()=>hashInput.click());
+hashDropzone.addEventListener('keydown',event=>{
+  if(event.key==='Enter' || event.key===' '){
+    event.preventDefault();
+    hashInput.click();
+  }
+});
+hashDropzone.addEventListener('dragover',event=>{
+  event.preventDefault();
+  hashDropzone.classList.add('dragging');
+});
+hashDropzone.addEventListener('dragleave',()=>hashDropzone.classList.remove('dragging'));
+hashDropzone.addEventListener('drop',event=>{
+  event.preventDefault();
+  hashDropzone.classList.remove('dragging');
+  if(event.dataTransfer?.files?.length){
+    const transfer=new DataTransfer();
+    for(const file of event.dataTransfer.files){
+      transfer.items.add(file);
+    }
+    hashInput.files=transfer.files;
+    handleHashFileSelect(hashInput.files);
+  }
+});
+mode.addEventListener('change',()=>{invalidateMessageResult();refresh()});
+$('aesKeySize').addEventListener('change',()=>{invalidateMessageResult();refresh()});
+$('rsaKeySize').addEventListener('change',()=>{invalidateMessageResult();refresh()});
 $('generateRsa').addEventListener('click',generateRsa);
-$('rsaPublic').addEventListener('input',scheduleRsaFingerprint);
+$('rsaPublic').addEventListener('input',()=>{invalidateMessageResult();scheduleRsaFingerprint()});
+$('key').addEventListener('input',invalidateMessageResult);
 $('rsaKeyMode').addEventListener('change',updateRsaKeyModeHint);
 $('rsaPrivate').addEventListener('input',()=>{
+  invalidateMessageResult();
   rsaPrivateCryptoKey=null;
   rsaGeneratedAt=null;
   if(rsaPrivate.value.trim()){
@@ -489,7 +739,7 @@ $('rsaPrivate').addEventListener('input',()=>{
 $('copyPublic').addEventListener('click',()=>copyKey(rsaPublic,'public key'));
 $('copyPrivate').addEventListener('click',()=>copyKey(rsaPrivate,'private key'));
 $('eye').addEventListener('click',e=>{
-  audio.play('click');const show_=key.type==='password';
+  const show_=key.type==='password';
   key.type=show_?'text':'password';e.currentTarget.textContent=show_?'Hide':'Show';
   e.currentTarget.title=show_?'Hide access key':'Show access key';
   e.currentTarget.setAttribute('aria-pressed',show_);e.currentTarget.setAttribute('aria-label',show_?'Hide access key':'Show access key');
@@ -497,7 +747,7 @@ $('eye').addEventListener('click',e=>{
 inp.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();run(e.shiftKey)}
 });
-inp.addEventListener('input',()=>{clearLegacyMigration();if(!inp.value.trim())show(EMPTY)});
+inp.addEventListener('input',invalidateMessageResult);
 $('migrateLegacy').addEventListener('click',()=>{
   if(typeof legacyMigrationText!=='string')return;
   inp.value=legacyMigrationText;
@@ -505,7 +755,7 @@ $('migrateLegacy').addEventListener('click',()=>{
   $('migrateLegacy').hidden=true;
   mode.value='aes';
   key.value='';
-  setMessageDownload(null);
+  invalidateMessageResult();
   refresh();
   $('migrationStatus').textContent='Legacy plaintext is ready in the message field. Enter a new, strong access key, then select Encrypt message to protect it with AES-256-GCM.';
   $('migrationStatus').hidden=false;

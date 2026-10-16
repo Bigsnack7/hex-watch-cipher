@@ -1,33 +1,33 @@
 export const NARRATION_GUIDES = Object.freeze({
   aes: Object.freeze([
-    'AES-256-GCM passphrase-based encryption is recommended for new password-protected messages. It uses your access key to derive an AES key and authenticates the encrypted message, so a wrong key or altered token is rejected.',
-    'To encrypt: enter a long, unique access key and your message, then select Encrypt message. Share the resulting CT2 token and the access key separately.',
-    'To decrypt: paste the complete CT2 token into the message field, enter the same access key, and select Decrypt message. CT1 tokens from older versions are also supported. For files, use the file controls; file encryption uses AES-GCM regardless of the selected text method.'
+    'AES-256-GCM is the recommended choice for a new message protected by an access key. It scrambles the message and checks for changes. If the key is wrong or someone changes the encrypted message, the app will not open it.',
+    'To protect a message, enter a long access key that you do not use anywhere else, type your message, and choose Encrypt message. Send the encrypted result and the access key separately. Anyone who gets both can read the message.',
+    'To read a protected message, paste the complete encrypted result into the message box, enter the same access key, and choose Decrypt message. Older CT1 messages are also supported. File encryption has its own controls and always uses AES-GCM.'
   ]),
   cbc: Object.freeze([
-    'AES-CBC with HMAC is the compatibility method for CBC workflows. It encrypts the message and adds a separate authentication check; the app verifies that check before decrypting. Prefer AES-GCM for new messages.',
-    'To encrypt: enter a long, unique access key and your message, then select Encrypt message. Share the CBC1 token and the access key separately.',
-    'To decrypt: paste the complete CBC1 token, enter the same access key, and select Decrypt message. Modified data or a wrong key is rejected. File encryption still uses AES-GCM.'
+    'This older encryption option is for working with systems that specifically need it. It scrambles the message and adds a separate check to spot changes. For a new message, AES-GCM is the simpler recommended choice.',
+    'To protect a message, enter a long access key that you do not use anywhere else, type your message, and choose Encrypt message. Send the encrypted result and the access key separately. Anyone who gets both can read the message.',
+    'To read a protected message, paste the complete CBC1 result into the message box, enter the same access key, and choose Decrypt message. A wrong key or changed result will be rejected. File encryption always uses AES-GCM.'
   ]),
   hybrid: Object.freeze([
-    'AES-GCM + RSA-OAEP is the recommended public-key method. AES-256-GCM encrypts the message with a fresh random key, and RSA-OAEP with SHA-256 protects that key. It uses the RSA1 format.',
-    'To encrypt: generate a key pair for yourself or paste the recipient public key in SPKI PEM format. Verify its SHA-256 fingerprint through a trusted separate channel, enter your message, then select Encrypt message.',
-    'Share the RSA1 token with the recipient, never the private key. To decrypt, the recipient pastes the token, supplies the matching private key, and selects Decrypt message. The access-key field is not used for RSA text messages.'
+    'This is the recommended way to send a message to someone without sharing an access key. The app scrambles the message with a new one-time key, then protects that key using the recipient’s public key.',
+    'To send a message, use the recipient’s public key. Before trusting it, compare its full fingerprint with the recipient using a separate trusted way, such as a phone call. Type your message and choose Encrypt message.',
+    'Send the encrypted RSA1 result to the recipient. Never send your private key. To read the message, the recipient needs the matching private key. The access-key box is not used for this message method.'
   ]),
   'rsa-direct': Object.freeze([
-    'RSA-OAEP direct encryption uses the RSA2 format and encrypts the message itself without AES. With the default 2048-bit key, the maximum is 190 UTF-8 bytes. Use RSA Hybrid for longer messages.',
-    'To encrypt a short message, paste or generate the recipient public key, verify its SHA-256 fingerprint through a trusted separate channel, enter no more than 190 UTF-8 bytes, and select Encrypt message. Share the RSA2 token; never share the private key.',
-    'To decrypt an RSA2 token, the recipient enters the matching private key and selects Decrypt message. The access-key field is not used. For longer messages, use hybrid RSA.'
+    'This method locks the message directly with the recipient’s public key. It is only for short messages: with a 2048-bit key, the limit is 190 bytes. Letters and symbols can use more than one byte, so a message may reach the limit sooner than expected. Use the hybrid method for longer messages.',
+    'To send a short message, use the recipient’s public key and confirm its full fingerprint through a separate trusted way. Keep the message within the displayed limit, then choose Encrypt message. Send the RSA2 result, never the private key.',
+    'To read an RSA2 message, the recipient needs the matching private key and chooses Decrypt message. The access-key box is not used. For a longer message, choose the hybrid method.'
   ]),
   'rsa-aes': Object.freeze([
-    'RSA-OAEP + AES-GCM is a dual-key, short-message format. RSA-OAEP encrypts the message first; PBKDF2 derives an AES-256-GCM key from your access-key passphrase, which then encrypts the RSA ciphertext. It uses the RSA3 format.',
-    'To encrypt: paste or generate the recipient public key, verify its SHA-256 fingerprint through a trusted separate channel, enter the shared access-key passphrase, and enter a message within the RSA key-size limit. Share the RSA3 token and passphrase separately.',
-    'To decrypt an RSA3 token, provide both the matching RSA private key and the same access-key passphrase. Both are required. The message limit depends on RSA key size; use AES-GCM + RSA-OAEP Hybrid for longer messages.'
+    'This is an older, special format for short messages. It uses the recipient’s public key and a shared access key together. Both are needed to read the message, and the message still has a size limit. For most new messages, choose the hybrid method instead.',
+    'To protect a message, use the recipient’s public key, confirm its full fingerprint through a separate trusted way, enter the shared access key, and keep the message within the displayed limit. Send the encrypted RSA3 result and access key separately.',
+    'To read an RSA3 message, the recipient needs both the matching private key and the same access key. The message limit depends on the public key. For longer messages, choose the hybrid method.'
   ]),
   legacy: Object.freeze([
-    'Grumpy v2 is a legacy-only method and is cryptographically insecure. It does not provide reliable confidentiality or tamper detection. Use it only to process old-format messages, never to protect sensitive information; prefer AES-256-GCM.',
-    'For legacy compatibility or testing: select this method, enter a non-empty key, enter the message and select Encrypt message, or paste existing ciphertext and select Decrypt message. This uses the old format and is not safe for new sensitive messages.',
-    'For new messages, use AES-256-GCM or a verified RSA hybrid method. After decrypting old Grumpy v2 text, use Prepare AES-256-GCM migration to re-encrypt it securely. File encryption always uses AES-GCM.'
+    'This old method is not safe. It may fail to keep a message secret and cannot reliably show whether someone changed it. Use it only to open old messages or for testing. Never use it for private or important information.',
+    'To work with an old message, choose this method, enter its old key, and choose Decrypt message. This method is unsafe for new messages, even if you choose a strong key.',
+    'For a new message, choose AES-GCM or the hybrid method. After opening an old message, choose Prepare AES-GCM migration, enter a new long access key, and encrypt it again. File encryption always uses AES-GCM.'
   ])
 });
 
@@ -41,29 +41,49 @@ export const NARRATION_LANGUAGES = Object.freeze({
   fr: Object.freeze({ label: 'Français', speechTag: 'fr-FR' })
 });
 
+const LANGUAGE_CHANGE_NARRATION = Object.freeze({
+  en: 'Narration language set to English. Future guidance will use this language.',
+  yo: 'A ti yan èdè Yorùbá fún ìtàn ohùn. Ìtọ́sọ́nà tó kàn yóò lo èdè yìí.',
+  ig: 'A họrọla Igbo maka ntuziaka olu. Ntuziaka na-esote ga-eji asụsụ a.',
+  ha: 'An zaɓi Hausa don jagorar murya. Bayani na gaba zai yi amfani da wannan yare.',
+  pcm: 'You don choose Nigerian Pidgin for narration. Di next guide go use dis language.',
+  es: 'El idioma de narración es español. Las próximas indicaciones usarán este idioma.',
+  fr: 'La langue de narration est le français. Les prochains conseils utiliseront cette langue.'
+});
+
 const STATUS_NARRATION = Object.freeze({
   en: Object.freeze({
-    messageEncrypted: 'Message encrypted. The encrypted token is displayed in the result area.',
-    messageDecrypted: 'Message decrypted. The plaintext is displayed in the result area; treat it as sensitive.',
-    legacyMigrationPrepared: 'Legacy plaintext is ready in the message field. Enter a new strong access key, then encrypt it with AES-256-GCM.',
-    operationFailed: 'The operation failed. Check the selected method, key, and input, then try again.',
-    fileEncrypted: 'File encrypted. The encrypted file has been saved.',
-    fileDecrypted: 'File decrypted. The plaintext file has been saved; treat it as sensitive.',
-    fileFailed: 'File operation failed. Check the selected file and access key, then try again.',
-    fileCancelled: 'File save cancelled. No complete output file was saved.',
-    rsaKeyGenerated: 'RSA key pair generated. Keep the private key secure.',
-    rsaKeyFailed: 'RSA key generation failed. Check browser support and try again.',
-    workspaceCleared: 'The message, result, and selected file were cleared. Access keys and RSA keys were not cleared.',
-    outputCopied: 'Result copied. Check whether it contains encrypted text or sensitive plaintext before sharing.',
-    keyCopied: 'Key copied to the clipboard. Keep private keys secret and verify public-key fingerprints.',
-    copyFailed: 'Copy failed. The text is selected for manual copying; check it carefully before sharing.',
-    tokenDownloaded: 'Encrypted text token downloaded. The passphrase and private key are not included.'
+    messageEncrypted: 'Your message is now encrypted. The result is shown on screen. Follow the selected method’s guidance for sharing any required access key or public key; never share a private key.',
+    messageEncryptedLegacy: 'The legacy text operation finished, but this method is unsafe and does not reliably protect messages. Do not use this result for private information. Re-encrypt with AES-GCM.',
+    messageDecrypted: 'Your message is now open and shown on screen. Other people may be able to see it, so handle it carefully.',
+    legacyMigrationPrepared: 'Your old message is ready to protect again. Enter a new, long access key, then choose Encrypt message.',
+    operationFailed: 'That did not work. Check the method, key, and message, then try again.',
+    hashSelected: 'Your files are ready for a file check. The results will appear on screen.',
+    hashCalculated: 'The file check is complete. Compare the full result with one from a source you trust.',
+    hashFailed: 'The file check did not work. Check the file and selected methods, then try again.',
+    fileEncrypted: 'Your file is now protected and has been saved. Keep the access key separate from the file.',
+    fileDecrypted: 'Your file is now open and has been saved. Other people may be able to see it, so handle it carefully.',
+    fileFailed: 'That file action did not work. Check the file and access key, then try again.',
+    fileCancelled: 'You cancelled saving the file. No complete output file was saved.',
+    rsaKeyGenerated: 'Your public and private keys are ready. Keep the private key secret. You need it to open messages sent to your public key.',
+    rsaKeyFailed: 'The keys could not be made. Check that your browser is up to date, then try again.',
+    workspaceCleared: 'The message, result, and selected file were cleared from this page. Access keys and RSA keys are still here.',
+    outputCopied: 'The result was copied. Check whether it is a private message before sharing it.',
+    keyCopied: 'The key was copied. Never share a private key. Before using a public key, check its fingerprint with the owner.',
+    copyFailed: 'The copy did not work. The text is selected so you can copy it yourself. Check it before sharing.',
+    tokenDownloaded: 'The encrypted message was downloaded. The access key and private key are not included.'
   }),
   yo: Object.freeze({
     messageEncrypted: 'A ti fi ìfiránṣẹ́ pamọ́. Ààmì ìfiránṣẹ́ tí a fi pamọ́ wà ní ibi àbájáde.',
+    messageEncryptedLegacy: 'Iṣẹ́ Grumpy v2 ti parí, ṣùgbọ́n ọ̀nà yìí kò ní ààbò, kò sì lè dáàbò bo ìfiránṣẹ́ dáadáa. Má ṣe lò ó fún ìsọfúnni àṣírí. Tún fi AES-GCM pamọ́.',
     messageDecrypted: 'A ti tú ìfìpamọ́ ìfiránṣẹ́. Ọ̀rọ̀ tó hàn jẹ́ àṣírí; pa á mọ́.',
     legacyMigrationPrepared: 'Ọ̀rọ̀ ìtàn àtijọ́ ti ṣetán nínú ààyè ìfiránṣẹ́. Tẹ kọ́kọ́rọ́ ààbò tuntun tó lágbára, kí o sì fi AES-256-GCM pamọ́.',
     operationFailed: 'Iṣẹ́ náà kò ṣàṣeyọrí. Ṣàyẹ̀wò ọ̀nà, kọ́kọ́rọ́ àti ohun tí o tẹ̀ sí, kí o sì tún gbìyànjú.',
+    hashSelected: 'A ti yan awọn faili fun iṣiro hash. A yoo ṣe iṣiro wọn pẹlu awọn algoridimu ti o yan.',
+    hashCalculated: 'Iṣiro hash faili ti pari. Awọn iye ti o yan wa ni agbegbe abajade.',
+    hashFailed: 'Iṣiro hash kuna. Ṣayẹwo faili ati algoridimu, ki o tun gbiyanju.',
+    hashCalculated: 'A ti ṣe ìṣírò hash fáìlì. Àwọn ọ̀rọ̀ hash ti a yàn wà nínú ibi àbájáde.',
+    hashFailed: 'Ìṣírò hash kò ṣàṣeyọrí. Ṣàyẹ̀wò fáìlì àti algoríìtmù, kí o sì tún gbìyànjú.',
     fileEncrypted: 'A ti fi fáìlì pamọ́, a sì ti fi fáìlì ìpamọ́ náà pamọ́ sí ibi tí o yàn.',
     fileDecrypted: 'A ti tú ìfìpamọ́ fáìlì. Ọ̀rọ̀ inú fáìlì náà jẹ́ àṣírí; pa á mọ́.',
     fileFailed: 'Iṣẹ́ fáìlì náà kò ṣàṣeyọrí. Ṣàyẹ̀wò fáìlì àti kọ́kọ́rọ́ ààbò, kí o sì tún gbìyànjú.',
@@ -78,9 +98,13 @@ const STATUS_NARRATION = Object.freeze({
   }),
   ig: Object.freeze({
     messageEncrypted: 'Ezochiela ozi. Akara ozi e zoro ezo dị na mpaghara nsonaazụ.',
+    messageEncryptedLegacy: 'Ọrụ Grumpy v2 agwụla, mana usoro a enweghị nchekwa ma ọ naghị echekwa ozi nke ọma. Ejila nsonaazụ a maka ozi nzuzo. Jiri AES-GCM zoo ozi ahụ ọzọ.',
     messageDecrypted: 'Megheela ozi. E gosiri ozi mbụ; chekwaa ya nke ọma.',
     legacyMigrationPrepared: 'Ozi ochie dị n\'oghere ozi ugbu a. Tinye paswọọdụ ọhụrụ siri ike, wee jiri AES-256-GCM zoo ya.',
     operationFailed: 'Ọrụ ahụ emeghị nke ọma. Lelee usoro, igodo na ozi i tinyere, wee nwaa ọzọ.',
+    hashSelected: 'A họrọla faịlụ maka ịgbakọ hash. A ga-agbakọ ha site na algọridim ndị ị họọrọ.',
+    hashCalculated: 'Agbakọọla hash faịlụ. Uru ndị ị họọrọ dị na mpaghara nsonaazụ.',
+    hashFailed: 'Mgbakọ hash adaghị. Lelee faịlụ na algọridim, wee nwaa ọzọ.',
     fileEncrypted: 'Ezochiela faịlụ ma chekwaa faịlụ e zoro ezo.',
     fileDecrypted: 'Megheela faịlụ. Faịlụ ahụ nwere ozi mbụ; chekwaa ya nke ọma.',
     fileFailed: 'Ọrụ faịlụ ahụ emeghị nke ọma. Lelee faịlụ na igodo nzuzo, wee nwaa ọzọ.',
@@ -95,9 +119,13 @@ const STATUS_NARRATION = Object.freeze({
   }),
   ha: Object.freeze({
     messageEncrypted: 'An ɓoye saƙon. Alamar saƙon da aka ɓoye tana cikin wurin sakamako.',
+    messageEncryptedLegacy: 'An kammala aikin Grumpy v2, amma wannan hanya ba ta da aminci kuma ba ta kare saƙo yadda ya kamata. Kada a yi amfani da sakamakon don bayanan sirri. Sake ɓoye saƙon da AES-GCM.',
     messageDecrypted: 'An buɗe saƙon. An nuna ainihin saƙon; kiyaye shi a sirrance.',
     legacyMigrationPrepared: 'Tsohon saƙon yana shirye a wurin saƙo. Shigar da sabon kalmar sirri mai ƙarfi, sannan a ɓoye shi da AES-256-GCM.',
     operationFailed: 'Aikin bai yi nasara ba. Duba hanya, maɓalli da bayanan da ka shigar, sannan a sake gwadawa.',
+    hashSelected: 'An zaɓi fayiloli don lissafin hash. Za a lissafta su da algorithms ɗin da aka zaɓa.',
+    hashCalculated: 'An lissafta hash ɗin fayil. Ana nuna sakamakon algorithms ɗin da aka zaɓa.',
+    hashFailed: 'Lissafin hash bai yi nasara ba. Duba fayil ɗin da algorithm, sannan a sake gwadawa.',
     fileEncrypted: 'An ɓoye fayil ɗin kuma an ajiye fayil ɗin da aka ɓoye.',
     fileDecrypted: 'An buɗe fayil ɗin. Fayil ɗin yanzu yana ɗauke da ainihin bayanai; kiyaye shi a sirrance.',
     fileFailed: 'Aikin fayil bai yi nasara ba. Duba fayil ɗin da maɓallin sirri, sannan a sake gwadawa.',
@@ -112,9 +140,13 @@ const STATUS_NARRATION = Object.freeze({
   }),
   pcm: Object.freeze({
     messageEncrypted: 'Message don encrypt. Di encrypted token dey for di result area.',
+    messageEncryptedLegacy: 'Di Grumpy v2 work don finish, but dis method no safe and e no fit protect message well. No use dis result for private matter. Encrypt di message again with AES-GCM.',
     messageDecrypted: 'Message don decrypt. Di original message show; keep am private.',
     legacyMigrationPrepared: 'Di old message don ready for di message box. Put new strong access key, then encrypt am with AES-256-GCM.',
     operationFailed: 'Di operation no work. Check di method, key and input, then try again.',
+    hashSelected: 'You don select files to calculate hash. E go calculate dem with di algorithms wey you choose.',
+    hashCalculated: 'File hash don calculate. Di result area show di hash values wey you choose.',
+    hashFailed: 'Hash calculation no work. Check di file and algorithm, then try again.',
     fileEncrypted: 'File don encrypt and di encrypted file don save.',
     fileDecrypted: 'File don decrypt. Di original file don save; keep am private.',
     fileFailed: 'File operation no work. Check di file and access key, then try again.',
@@ -129,9 +161,13 @@ const STATUS_NARRATION = Object.freeze({
   }),
   es: Object.freeze({
     messageEncrypted: 'Mensaje cifrado. El token cifrado aparece en el área de resultados.',
+    messageEncryptedLegacy: 'La operación Grumpy v2 ha terminado, pero este método no es seguro ni protege los mensajes de forma fiable. No uses este resultado para información privada. Vuelve a cifrarlo con AES-GCM.',
     messageDecrypted: 'Mensaje descifrado. El texto original aparece en el área de resultados; protégelo.',
     legacyMigrationPrepared: 'El texto heredado está listo en el campo del mensaje. Introduce una clave de acceso nueva y segura y cifralo con AES-256-GCM.',
     operationFailed: 'La operación ha fallado. Comprueba el método, la clave y los datos, e inténtalo de nuevo.',
+    hashSelected: 'Archivos seleccionados para calcular el hash. Los resultados se actualizarán para cada algoritmo elegido.',
+    hashCalculated: 'Hash del archivo calculado. Los valores seleccionados aparecen en el área de resultados.',
+    hashFailed: 'No se pudo calcular el hash. Comprueba el archivo y el algoritmo, e inténtalo de nuevo.',
     fileEncrypted: 'Archivo cifrado. Se ha guardado el archivo cifrado.',
     fileDecrypted: 'Archivo descifrado. Se ha guardado el archivo original; protégelo.',
     fileFailed: 'La operación con el archivo ha fallado. Comprueba el archivo y la clave, e inténtalo de nuevo.',
@@ -146,9 +182,13 @@ const STATUS_NARRATION = Object.freeze({
   }),
   fr: Object.freeze({
     messageEncrypted: 'Message chiffré. Le jeton chiffré apparaît dans la zone de résultat.',
+    messageEncryptedLegacy: 'Le traitement Grumpy v2 est terminé, mais cette méthode est dangereuse et ne protège pas les messages de manière fiable. N’utilisez pas ce résultat pour des informations privées. Chiffrez-le de nouveau avec AES-GCM.',
     messageDecrypted: 'Message déchiffré. Le texte original apparaît dans la zone de résultat ; protégez-le.',
     legacyMigrationPrepared: 'Le texte hérité est prêt dans le champ du message. Saisissez une nouvelle clé d’accès robuste, puis chiffrez-le avec AES-256-GCM.',
     operationFailed: 'Échec de l’opération. Vérifiez la méthode, la clé et les données, puis réessayez.',
+    hashSelected: 'Fichiers sélectionnés pour le hachage. Les résultats seront mis à jour pour chaque algorithme choisi.',
+    hashCalculated: 'Hachage du fichier terminé. Les valeurs sélectionnées sont affichées dans la zone de résultats.',
+    hashFailed: 'Le hachage a échoué. Vérifiez le fichier et l’algorithme, puis réessayez.',
     fileEncrypted: 'Fichier chiffré. Le fichier chiffré a été enregistré.',
     fileDecrypted: 'Fichier déchiffré. Le fichier original a été enregistré ; protégez-le.',
     fileFailed: 'Échec de l’opération sur le fichier. Vérifiez le fichier et la clé, puis réessayez.',
@@ -352,6 +392,14 @@ export function getNarrationGuide(mode, language = 'en', keyBits = 256, rsaKeyBi
     guide = NARRATION_GUIDES[mode] || NARRATION_GUIDES.aes;
   }
   if (mode === 'aes') return guide.map(line => line.replaceAll('AES-256-GCM', `AES-${keyBits}-GCM`));
+  if (mode === 'rsa-direct') {
+    const maxBytes = rsaKeyBits / 8 - 66;
+    const directGuide = guide.map(line =>
+      line.replaceAll('2048', String(rsaKeyBits)).replaceAll('190', String(maxBytes))
+    );
+    directGuide[0] = `${directGuide[0]} ${getRsaKeySizeNarration(language, rsaKeyBits)}`;
+    return directGuide;
+  }
   if (mode === 'hybrid' || mode === 'rsa-direct' || mode === 'rsa-aes') {
     const withRsaSize = [...guide];
     withRsaSize[0] = `${withRsaSize[0]} ${getRsaKeySizeNarration(language, rsaKeyBits)}`;
@@ -375,7 +423,11 @@ export function getNarrationGuide(mode, language = 'en', keyBits = 256, rsaKeyBi
 
 function getKeySizeNarration(language, keyBits) {
   const phrases = {
-    en: `AES-GCM key-size selector. The selected derived key is ${keyBits} bits. This is the encryption key length, not the number of characters in your passphrase.`,
+    en: `AES key size is the length of the secret key the app creates from your access key to lock and unlock messages. The number of bits measures that key; more bits mean more possible keys to guess, but do not make a weak access key stronger. ${keyBits === 128
+      ? '128 bits is already strong. The app recommends 256 bits for new messages.'
+      : keyBits === 192
+        ? '192 bits is a supported middle option. If you have no special requirement, choose the recommended 256-bit default.'
+        : '256 bits is the recommended default for new messages.'} Use a long, unique access key whatever size you choose. This setting applies only to new messages; each message saves its size so the app can open it correctly later. File encryption always uses its own fixed AES-256 key size.`,
     yo: `Aṣàyàn ìwọ̀n kọ́kọ́rọ́ AES-GCM. Ìwọ̀n kọ́kọ́rọ́ tí a yọ jáde tí a yàn jẹ́ bítì ${keyBits}. Èyí ni ìwọ̀n kọ́kọ́rọ́ ìpamọ́, kì í ṣe iye lẹ́tà inú ọ̀rọ̀ aṣínà rẹ.`,
     ig: `Nhọrọ nha igodo AES-GCM. Igodo e wepụtara ahọrọ bụ bit ${keyBits}. Nke a bụ ogologo igodo nzuzo, ọ bụghị ọnụọgụ mkpụrụedemede dị na paswọọdụ gị.`,
     ha: `Zaɓin girman maɓallin AES-GCM. Girman maɓallin da aka zaɓa shi ne bit ${keyBits}. Wannan tsawon maɓallin ɓoyewa ne, ba adadin haruffan kalmar sirrinka ba.`,
@@ -389,52 +441,44 @@ function getKeySizeNarration(language, keyBits) {
 function getControlNarration(id, language) {
   const controls = {
     en: {
-      narration: 'Narration control. Turn it on to hear guidance for the selected method and focused controls.',
-      narrationLanguage: 'Narration language selector. Choose the language for spoken guidance.',
-      soundEffects: 'Sound effects control. Turn optional interface sounds on or off; sounds do not contain message information.',
-      accessKeyVisibility: 'Access-key visibility control. It reveals or masks the key currently entered on screen.'
+    narration: 'Spoken guidance. When it is on, click a control to hear what it does. Guidance does not play by itself.',
+    narrationLanguage: 'Spoken guidance language. Choose the language you want to hear.',
+    accessKeyVisibility: 'Show or hide access key. Showing it lets anyone looking at your screen read it.'
     },
     yo: {
       narration: 'Bọ́tìnì ìtàn ohùn. Tẹ̀ ẹ́ láti gbọ́ ìtọ́sọ́nà nípa ọ̀nà tí a yàn àti àwọn ohun èlò tí o dojú kọ.',
       narrationLanguage: 'Aṣàyàn èdè ìtàn ohùn. Yan èdè tí ìtọ́sọ́nà yóò lò.',
-      soundEffects: 'Bọ́tìnì ìró. Tan tàbí pa àwọn ìró ìṣàkóso àṣàyàn; wọn kò ní ìsọfúnni ìfiránṣẹ́.',
       accessKeyVisibility: 'Bọ́tìnì hàn tàbí fi kọ́kọ́rọ́ ààbò pamọ́. Ó ń fi kọ́kọ́rọ́ tí o tẹ̀ sí ojú ìwé hàn tàbí bo ó.'
     },
     ig: {
       narration: 'Bọtịnụ olu. Gbanye ya ka ị nụ ntuziaka gbasara usoro ahọpụtara na njikwa ị lekwasịrị anya.',
       narrationLanguage: 'Nhọrọ asụsụ olu. Họrọ asụsụ ntuziaka ga-eji.',
-      soundEffects: 'Njikwa ụda. Gbanye ma ọ bụ mechie ụda nhọrọ; ụda anaghị ebu ozi ozi gị.',
       accessKeyVisibility: 'Njikwa igosi ma ọ bụ zoo igodo nzuzo. Ọ na-egosi ma ọ bụ zoo igodo i tinyere na ihuenyo.'
     },
     ha: {
       narration: 'Maɓallin jagorar murya. Kunna shi don jin bayani kan hanyar da aka zaɓa da abubuwan da ka mayar da hankali a kansu.',
       narrationLanguage: 'Zaɓin yaren jagorar murya. Zaɓi yaren da jagorar za ta yi amfani da shi.',
-      soundEffects: 'Maɓallin sauti. Kunna ko kashe sautukan mu’amala na zaɓi; ba sa ƙunsar bayanin saƙonka.',
       accessKeyVisibility: 'Maɓallin nuna ko ɓoye maɓallin sirri. Yana nuna ko ɓoye abin da ka shigar a allon.'
     },
     pcm: {
       narration: 'Narration control. On am to hear guide for di method wey you choose and di control wey you focus.',
       narrationLanguage: 'Narration language selector. Choose di language wey narration go use.',
-      soundEffects: 'Sound effects control. Turn optional interface sounds on or off; dem no carry your message information.',
       accessKeyVisibility: 'Access key visibility control. E fit show or hide di key wey you type for di screen.'
     },
     es: {
       narration: 'Control de narración. Actívalo para escuchar indicaciones sobre el método seleccionado y los controles enfocados.',
       narrationLanguage: 'Selector del idioma de narración. Elige el idioma de las indicaciones habladas.',
-      soundEffects: 'Control de efectos de sonido. Activa o desactiva los sonidos opcionales de la interfaz; no contienen información del mensaje.',
       accessKeyVisibility: 'Control para mostrar u ocultar la clave de acceso introducida en pantalla.'
     },
     fr: {
       narration: 'Commande de narration. Activez-la pour entendre les conseils sur la méthode sélectionnée et les commandes ciblées.',
       narrationLanguage: 'Sélecteur de langue de narration. Choisissez la langue des conseils vocaux.',
-      soundEffects: 'Commande des effets sonores. Activez ou désactivez les sons facultatifs de l’interface ; ils ne contiennent aucune information du message.',
       accessKeyVisibility: 'Commande permettant d’afficher ou de masquer la clé d’accès saisie à l’écran.'
     }
   };
   const keyById = {
     voxB: 'narration',
     narrLanguage: 'narrationLanguage',
-    sfxB: 'soundEffects',
     eye: 'accessKeyVisibility'
   }[id];
   return keyById ? controls[language]?.[keyById] || controls.en[keyById] : null;
@@ -443,7 +487,11 @@ function getControlNarration(id, language) {
 function getRsaKeySizeNarration(language, keyBits) {
   const maxBytes = keyBits / 8 - 66;
   const phrases = {
-    en: `RSA key-size selector. New key pairs generated here will use ${keyBits}-bit RSA. Direct RSA and RSA3 dual-key messages allow up to ${maxBytes} UTF-8 bytes with this size. Pasted or imported keys keep their own size and limit. Keys below 2048 bits are not supported.`,
+    en: `RSA key size sets the size of a matched public and private key pair. The public key locks messages for its owner; only the matching private key unlocks them, so keep that private key safe. Larger RSA keys can take longer to create and use. ${keyBits === 2048
+      ? '2048 bits is the recommended default and usually offers a practical balance of speed and compatibility.'
+      : keyBits === 3072
+        ? '3072 bits is larger than the default and may take longer. Choose it when your security requirements call for it.'
+        : '4096 bits is the largest option and may take longest. Choose it when your security requirements call for it.'} This setting affects new key pairs only, not keys you paste or import. For direct RSA and RSA3, this size limits messages to ${maxBytes} bytes; some characters use several bytes. For longer messages, choose hybrid encryption: RSA protects a small one-time key, while AES protects the message. Keep the default unless you have a specific reason to change it. RSA and AES bit sizes measure different things, so do not compare their numbers directly.`,
     yo: `Aṣàyàn ìwọ̀n kọ́kọ́rọ́ RSA. Àwọn kọ́kọ́rọ́ tuntun tí a ṣẹ̀dá níbí yóò jẹ́ RSA bítì ${keyBits}. RSA tààrà àti ìfiránṣẹ́ RSA3 nílò báítì UTF-8 tó pọ̀ jù ${maxBytes} fún ìwọ̀n yìí. Kọ́kọ́rọ́ tí a lẹ̀ mọ́ tàbí kó wọlé ní ìwọ̀n àti ààlà tirẹ̀. A kò gba kọ́kọ́rọ́ tó kéré sí bítì 2048.`,
     ig: `Nhọrọ nha igodo RSA. Igodo ọhụrụ e mepụtara ebe a ga-eji RSA bit ${keyBits}. Ozi direct RSA na RSA3 nwere oke byte UTF-8 ${maxBytes} na nha a. Igodo e tinyere ma ọ bụ bubata nwere nha na oke nke ha. A naghị akwado igodo na-erughị bit 2048.`,
     ha: `Zaɓin girman maɓallin RSA. Sabbin maɓallan da aka ƙirƙira a nan za su yi amfani da RSA mai bit ${keyBits}. Saƙonnin direct RSA da RSA3 suna da iyakar byte UTF-8 ${maxBytes} a wannan girman. Maɓallan da aka manna ko shigo da su suna da nasu girma da iyaka. Ba a tallafa wa ƙasa da bit 2048 ba.`,
@@ -459,7 +507,7 @@ function getRsaGeneratedNarration(language, keyBits, mode) {
   const message = STATUS_NARRATION[language]?.rsaKeyGenerated || STATUS_NARRATION.en.rsaKeyGenerated;
   if (mode !== 'rsa-direct' && mode !== 'rsa-aes') return message;
   const limit = {
-    en: `This ${keyBits}-bit key allows up to ${maxBytes} UTF-8 bytes for this short-message method.`,
+    en: `With this ${keyBits}-bit key, the short-message limit is ${maxBytes} bytes. Letters and symbols may use more than one byte.`,
     yo: `Kọ́kọ́rọ́ bítì ${keyBits} yìí gba báítì UTF-8 tó pọ̀ jù ${maxBytes} fún ọ̀nà ìfiránṣẹ́ kúkúrú yìí.`,
     ig: `Igodo bit ${keyBits} a nwere oke byte UTF-8 ${maxBytes} maka usoro ozi dị mkpirikpi a.`,
     ha: `Wannan maɓallin bit ${keyBits} yana da iyakar byte UTF-8 ${maxBytes} ga wannan hanyar saƙo gajere.`,
@@ -470,6 +518,13 @@ function getRsaGeneratedNarration(language, keyBits, mode) {
   return `${message} ${limit}`;
 }
 
+const HASH_ALGORITHM_GUIDES = Object.freeze({
+  md5: 'MD5 is checked. It creates a short code from a file. The same file makes the same code, so MD5 can help spot duplicates or work with older systems. But MD5 is not safe for security: someone can make a changed file with the same code. Do not use MD5 to prove a file is genuine or unchanged. To use it here, leave MD5 checked, choose or drop your file, then compare the code shown here with one from a source you trust. For a safer check, use SHA-256.',
+  sha1: 'SHA one is checked. It creates a code from a file and may be needed by older systems. But SHA one is no longer safe for important security checks: different files can be made to have the same code. To use it here, leave SHA one checked, choose or drop your file, then compare the code shown here with one from a source you trust. For a new check, use SHA-256 unless a trusted system asks for SHA one.',
+  sha256: 'SHA two fifty-six is checked. It creates a code you can use to check that a download matches the file its maker provided. It does not hide the file or prove who made it. If someone can change both the file and the code you check against, this check cannot protect you. To use it here, leave SHA two fifty-six checked, choose or drop your file, then compare the full code shown here with a code from a source you trust, such as the maker’s official website.',
+  sha512: 'SHA five twelve is checked. It creates a longer code that you can use to check a file. Choose it when the maker or system asks for SHA five twelve. It does not hide the file or prove who made it. The longer code can also be harder to compare, and it is not always the right choice instead of SHA two fifty-six. To use it here, leave SHA five twelve checked, choose or drop your file, then compare the full code shown here with a code from a source you trust.'
+});
+
 export function createAudioController({ isLocked }) {
   const $ = id => document.getElementById(id);
   const light = $('light');
@@ -478,13 +533,10 @@ export function createAudioController({ isLocked }) {
   const audioStatus = $('audioStatus');
   const narrationLanguageSelect = $('narrLanguage');
   const toggles = [];
-  let context = null;
-  let soundEffects = false;
   let narrationEnabled = false;
   let resetNarrationToggle = () => {};
   let narrationRunning = false;
   let narrationGeneration = 0;
-  let narrationIndex = 0;
   let narrationMode = 'aes';
   let narrationLanguage = 'en';
   let narrationKeyBits = 256;
@@ -492,15 +544,8 @@ export function createAudioController({ isLocked }) {
   let narrationGuide = getNarrationGuide(
     narrationMode, narrationLanguage, narrationKeyBits, narrationRsaKeyBits
   );
-  let narrationTimer = 0;
   let voice = null;
 
-  const effects = {
-    encrypt: [[440, 0, .08], [660, .1, .08], [880, .2, .14, .18]],
-    decrypt: [[880, 0, .08], [660, .1, .16, .18]],
-    blip: [[1200, 0, .05, .1, 'sine']],
-    click: [[300, 0, .04, .06]]
-  };
   const speech = typeof window.speechSynthesis !== 'undefined' &&
     typeof window.speechSynthesis.speak === 'function' &&
     typeof window.speechSynthesis.cancel === 'function' &&
@@ -509,47 +554,10 @@ export function createAudioController({ isLocked }) {
   function reportError(error) {
     audioStatus.textContent = error.message === 'speech-unavailable'
       ? 'Narration is not supported by this browser.'
-      : error.message === 'audio-unavailable'
-        ? 'Audio is not supported by this browser.'
-        : error.name === 'NotAllowedError'
-          ? 'Audio was blocked by the browser. Click the audio control again to allow playback.'
-          : error.message === 'audio-suspended'
-            ? 'Audio is paused by the browser. Reload this page, then enable audio again.'
-            : `Could not start audio${error.message ? `: ${error.message}` : ''}. Check browser audio settings and try again.`;
+      : error.name === 'NotAllowedError'
+        ? 'Speech was blocked by the browser. Click Narration again to allow playback.'
+        : `Could not start narration${error.message ? `: ${error.message}` : ''}. Check browser speech settings and try again.`;
     audioStatus.classList.add('error');
-  }
-
-  async function getContext() {
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextCtor) throw new Error('audio-unavailable');
-    if (!context || context.state === 'closed' || context.state === 'interrupted') {
-      context = new AudioContextCtor();
-    }
-    if (context.state !== 'running') await context.resume();
-    if (context.state !== 'running') throw new Error('audio-suspended');
-    return context;
-  }
-
-  function playTone(name) {
-    if (!soundEffects) return;
-    getContext().then(audioContext => {
-      const start = audioContext.currentTime;
-      effects[name].forEach(([frequency, offset, duration, volume = .15, type = 'square']) => {
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        const at = start + offset;
-        oscillator.type = type;
-        oscillator.frequency.value = frequency;
-        gain.gain.setValueAtTime(0, at);
-        gain.gain.linearRampToValueAtTime(volume, at + .01);
-        gain.gain.setValueAtTime(volume, at + duration - .02);
-        gain.gain.linearRampToValueAtTime(0, at + duration);
-        oscillator.connect(gain);
-        gain.connect(audioContext.destination);
-        oscillator.start(at);
-        oscillator.stop(at + duration);
-      });
-    }).catch(reportError);
   }
 
   function pickVoice(language) {
@@ -576,7 +584,6 @@ export function createAudioController({ isLocked }) {
   function stopNarration() {
     narrationRunning = false;
     narrationGeneration++;
-    clearTimeout(narrationTimer);
     if (speech) window.speechSynthesis.cancel();
     narration.classList.remove('active');
     light.classList.remove('active');
@@ -592,44 +599,6 @@ export function createAudioController({ isLocked }) {
     audioStatus.classList.add('error');
   }
 
-  function say(generation) {
-    if (generation !== narrationGeneration || !narrationRunning) return;
-    if (narrationIndex >= narrationGuide.length) {
-      narrationIndex = 0;
-      narrationTimer = setTimeout(() => say(generation), 10_000);
-      return;
-    }
-    if (document.hidden) {
-      narrationTimer = setTimeout(() => say(generation), 2000);
-      return;
-    }
-    try {
-      voice = voice || pickVoice(narrationLanguage);
-      const line = narrationGuide[narrationIndex++];
-      const utterance = new window.SpeechSynthesisUtterance(line);
-      if (voice) utterance.voice = voice;
-      utterance.lang = NARRATION_LANGUAGES[narrationLanguage].speechTag;
-      utterance.rate = .82;
-      utterance.pitch = .75;
-      utterance.volume = .85;
-      narrationText.textContent = `"${line}"`;
-      narration.classList.add('active');
-      light.classList.add('active');
-      utterance.onend = () => {
-        if (generation !== narrationGeneration) return;
-        narration.classList.remove('active');
-        light.classList.remove('active');
-        narrationTimer = setTimeout(() => say(generation), 3000);
-      };
-      utterance.onerror = () => {
-        failNarration(generation);
-      };
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      failNarration(generation);
-    }
-  }
-
   function startNarration() {
     if (!speech) throw new Error('speech-unavailable');
     if (narrationRunning) return true;
@@ -637,31 +606,24 @@ export function createAudioController({ isLocked }) {
     audioStatus.classList.remove('error');
     narrationEnabled = true;
     narrationRunning = true;
-    say(++narrationGeneration);
     return narrationRunning;
   }
 
-  function setNarrationMode(mode) {
+  function setNarrationMode(mode, announce = false) {
     if ((!NARRATION_GUIDES[mode] && mode !== 'rsa-direct') || mode === narrationMode) return;
     narrationMode = mode;
     narrationGuide = getNarrationGuide(mode, narrationLanguage, narrationKeyBits, narrationRsaKeyBits);
-    narrationIndex = 0;
-    if (narrationRunning) {
-      stopNarration();
-      narrationRunning = true;
-      say(++narrationGeneration);
+    if (announce && narrationRunning) {
+      announceMessage(getContextualGuide($('mode')));
     }
   }
 
-  function setNarrationKeySize(keyBits) {
+  function setNarrationKeySize(keyBits, announce = false) {
     if (![128, 192, 256].includes(keyBits) || keyBits === narrationKeyBits) return;
     narrationKeyBits = keyBits;
     narrationGuide = getNarrationGuide(narrationMode, narrationLanguage, narrationKeyBits, narrationRsaKeyBits);
-    narrationIndex = 0;
-    if (narrationRunning) {
-      stopNarration();
-      narrationRunning = true;
-      say(++narrationGeneration);
+    if (announce && narrationRunning) {
+      announceMessage(getKeySizeNarration(narrationLanguage, narrationKeyBits));
     }
   }
 
@@ -670,12 +632,6 @@ export function createAudioController({ isLocked }) {
     narrationLanguage = language;
     voice = null;
     narrationGuide = getNarrationGuide(narrationMode, language, narrationKeyBits, narrationRsaKeyBits);
-    narrationIndex = 0;
-    if (narrationRunning) {
-      stopNarration();
-      narrationRunning = true;
-      say(++narrationGeneration);
-    }
   }
 
   function setNarrationRsaKeySize(keyBits, announce = false) {
@@ -684,7 +640,6 @@ export function createAudioController({ isLocked }) {
     narrationGuide = getNarrationGuide(
       narrationMode, narrationLanguage, narrationKeyBits, narrationRsaKeyBits
     );
-    narrationIndex = 0;
     if (announce && narrationRunning) {
       announceMessage(getRsaKeySizeNarration(narrationLanguage, narrationRsaKeyBits));
     }
@@ -692,8 +647,16 @@ export function createAudioController({ isLocked }) {
 
   function getContextualGuide(target) {
     if (!target || typeof target.closest !== 'function') return null;
-    const element = target.closest('input,textarea,select,button,label,.field-hint,.otext,.audio-status');
+    const element = target.closest(
+      'input,textarea,select,button,label,.field-hint,.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
+    );
     if (!element) return null;
+    const hashAlgorithmInput = element.name === 'hashAlgorithm' ? element : element.querySelector?.('input[name="hashAlgorithm"]');
+    if (hashAlgorithmInput && hashAlgorithmInput.name === 'hashAlgorithm') {
+      const algorithm = hashAlgorithmInput.value;
+      return HASH_ALGORITHM_GUIDES[algorithm] ||
+        'Hash algorithm selector. Choose the digest you want to calculate with the selected file.';
+    }
     const id = element.tagName === 'LABEL' ? element.htmlFor : element.id;
     const controlNarration = getControlNarration(id, narrationLanguage);
     if (controlNarration) return controlNarration;
@@ -713,6 +676,9 @@ export function createAudioController({ isLocked }) {
       if (id === 'encB' || id === 'inp' || id === 'rsaPublic' || id === 'generateRsa' || id === 'copyPublic') {
         return narrationGuide[1];
       }
+      if (id === 'hashInput' || id === 'hashDropzone' || id === 'hashSelected' || id === 'hashOutput') {
+        return getControlNarration(id, narrationLanguage) || 'File hash calculator. Select files and choose MD5, SHA-1, SHA-256, or SHA-512 to compute the local digest values in your browser.';
+      }
       if (id === 'fileInput' || id === 'fileHint' || id === 'fileStatus' ||
           id === 'fileEncrypt' || id === 'fileDecrypt') {
         return getNarrationGuide('aes', narrationLanguage, narrationKeyBits)[2];
@@ -722,51 +688,58 @@ export function createAudioController({ isLocked }) {
       if (id === 'audioStatus') return $('audioStatus').textContent || getControlNarration('voxB', narrationLanguage);
       return narrationGuide[0];
     }
-    const method = NARRATION_GUIDES[narrationMode];
+    const method = narrationGuide;
     const why = {
-      aes: 'AES-GCM is the recommended password-based choice because encryption and tamper detection are built into one widely supported mode.',
-      cbc: 'CBC with HMAC is provided for compatibility with CBC-based workflows; AES-GCM is generally simpler for new messages.',
-      'rsa-direct': 'RSA-OAEP direct encryption encrypts the message itself and is limited to short messages: at most 190 UTF-8 bytes with a 2048-bit key. Choose AES-GCM + RSA-OAEP Hybrid for longer messages.',
-      'rsa-aes': 'RSA-OAEP encrypts the short message first, then AES-GCM encrypts that RSA ciphertext using a key derived from a shared passphrase. Decryption requires both the recipient private key and that passphrase; this RSA3 format is limited by the RSA message-size limit.',
-      hybrid: 'AES-GCM + RSA-OAEP is the recommended public-key method, using RSA public-key delivery for a fresh AES-GCM key. The sender and recipient do not need to share a message passphrase.',
-      legacy: 'Grumpy v2 is not better for security. It is available for old-format compatibility and testing, but use AES-GCM or verified RSA hybrid encryption for new messages.'
+      aes: 'This is the recommended choice when you and the recipient can share an access key safely. It also checks whether the encrypted message was changed.',
+      cbc: 'This older choice is only needed for some existing systems. Use the recommended AES-GCM method for a new message.',
+      'rsa-direct': `This method can only protect a short message. With a ${narrationRsaKeyBits}-bit key, the limit is ${narrationRsaKeyBits / 8 - 66} bytes. Choose the hybrid method for a longer message.`,
+      'rsa-aes': 'This special method needs both a shared access key and the recipient’s private key to open a message. It is limited to short messages.',
+      hybrid: 'This is the recommended way to send a message using a recipient’s public key. You do not need to share an access key for the message.',
+      legacy: 'This old method is unsafe and is only here to open old messages. Never use it to protect a new or private message.'
     }[narrationMode];
     const accessKey = narrationMode === 'rsa-aes'
-      ? 'This dual-key mode requires a shared passphrase for its AES-GCM layer as well as the recipient RSA private key.'
+      ? 'This method needs the shared access key as well as the recipient’s private key.'
       : narrationMode === 'hybrid' || narrationMode === 'rsa-direct'
-      ? 'The access key is not used for RSA text messages. It is used for file encryption and password-based modes.'
+      ? 'This access key is not used for this message method. It is still needed for file encryption and access-key methods.'
       : narrationMode === 'legacy'
-        ? 'For Grumpy v2 compatibility or testing, enter the legacy key. This cipher is insecure, does not reliably protect confidentiality or detect tampering, and is not suitable for new or sensitive messages.'
-        : 'The access key is the passphrase from which this mode derives its encryption key. Use a long, unique passphrase and share it separately from the encrypted token.';
+        ? 'Enter the old key only to open an old message. This method is unsafe and cannot reliably show if someone changed the message.'
+        : 'Use a long access key that you do not use anywhere else. Share it separately from the protected message, because anyone with both can read the message.';
     const guides = {
-      mode: `Encryption method selector. ${method[0]} ${why}`,
+      mode: `Message protection method. ${method[0]} ${why}`,
       modeHint: `${method[0]} ${why}`,
       aesKeySize: getKeySizeNarration(narrationLanguage, narrationKeyBits),
       rsaKeySize: getRsaKeySizeNarration(narrationLanguage, narrationRsaKeyBits),
-      key: `Access key field. ${accessKey}`,
-      inp: `Message or encrypted token field. Type the original message here before encryption, or paste the complete encrypted token here before decryption. ${why}`,
-      encB: `Encrypt message button. It encrypts the text in the message field using the selected method and displays an encrypted result. ${why}`,
-      decB: `Decrypt message button. Paste the complete token, provide the matching access key or RSA private key as required, then select this button. Authenticated modes reject a wrong key or modified token. ${why}`,
-      clrB: 'Clear button. It clears the current message, result, and selected file from this workspace. It does not delete files you already downloaded.',
-      out: 'Result area. It displays either the encrypted token or the decrypted message. Treat decrypted text as sensitive; use Download .txt only to save an encrypted token.',
-      copy: 'Copy output button. It copies the current result to the clipboard. Check whether the result is encrypted or plaintext before sharing it.',
-      downloadToken: 'Download text button. It saves only the encrypted token as a text file, not the access key or private key.',
-      rsaPublic: 'RSA public key field. Paste the recipient public key in SPKI PEM format to encrypt for them. Public keys may be shared, but verify the SHA-256 fingerprint with the recipient through a separate trusted channel.',
-      rsaPrivate: 'Private-key PEM field. Paste a matching PKCS#8 private key here to decrypt RSA messages, including direct and hybrid RSA tokens. Never share this key. Exportable private keys are visible in this page and need a secure backup.',
-      rsaKeyMode: 'Private-key handling selector. Non-extractable keys stay in browser memory and cannot be backed up here; exportable PEM keys can be backed up but are visible and must be protected.',
+      key: `Access key box. ${accessKey}`,
+      inp: `Message box. Type the message you want to protect, or paste the complete protected message here to open it. ${why}`,
+      encB: `Encrypt message button. It protects the message in the box and shows the result here. ${why}`,
+      decB: `Decrypt message button. Paste the complete protected message and provide the matching access key or private key, as needed. If the key is wrong or the protected message was changed, it may not open. ${why}`,
+      clrB: 'Clear button. It removes the message, result, and selected file from this page. It does not delete anything you already saved to your device.',
+      out: 'Result area. This shows either a protected message or an opened message. Opened messages may be private. Do not share them unless you mean to.',
+      copy: 'Copy result button. It copies the result. Check that the result is safe to share before sending it to anyone.',
+      downloadToken: 'Download message button. It saves the protected message, but not the access key or private key.',
+      rsaPublic: 'Recipient public key box. Paste the public key text here to protect a message for its owner. Public keys can be shared, but compare the full fingerprint with the owner through a separate trusted way first.',
+      rsaPrivate: 'Private key box. Paste the matching private key here to open messages. This key can unlock messages sent to its matching public key. Never share it. If you choose to show or export it, keep it somewhere secure.',
+      rsaKeyMode: 'Private key storage choice. A key kept only in the browser cannot be backed up here and is lost when the page reloads or locks. An exported key can be backed up, but you must keep it secret.',
       rsaKeySizeHint: getRsaKeySizeNarration(narrationLanguage, narrationRsaKeyBits),
-      generateRsa: `Generate key pair button. It creates a ${narrationRsaKeyBits}-bit RSA public and private key pair. The default private key is non-extractable and is lost on reload or privacy lock. Confirm key fingerprints before exchanging public keys.`,
-      copyPublic: 'Copy public key button. The public key is safe to share, but verify its fingerprint with the intended recipient first.',
-      copyPrivate: 'Copy private key button. This copies the exportable private key, which can decrypt messages addressed to it. Store it securely and never share it.',
-      migrateLegacy: 'Prepare AES-GCM migration button. It transfers successfully decrypted legacy plaintext into the message field, selects the recommended AES-256-GCM method, and clears the old passphrase. Enter a new strong access key and encrypt to create a modern authenticated token. Grumpy v2 remains insecure.',
-      rsaFingerprint: 'Public-key fingerprint. Compare the full SHA-256 fingerprint through a separate trusted channel before using this public key. A matching fingerprint confirms the key bytes match, not the owner identity.',
-      fileInput: 'File selection. Choose a file to encrypt or an encrypted file to decrypt. File operations always use chunked AES-256-GCM and the access key, regardless of the selected text method.',
-      fileEncrypt: 'Encrypt and download file button. It encrypts the selected file using chunked AES-256-GCM and the access key, then saves an encrypted file.',
-      fileDecrypt: 'Decrypt and download file button. It verifies each AES-GCM chunk before writing the corresponding plaintext file. Use the same access key used for encryption.'
+      generateRsa: `Make keys button. It makes a ${narrationRsaKeyBits}-bit public key and private key. The private key kept in the browser is lost if the page reloads or locks. Check the public key fingerprint with its owner before using it.`,
+      copyPublic: 'Copy public key button. You can share this key, but check its fingerprint with the owner first.',
+      copyPrivate: 'Copy private key button. This copies a key that can open messages. Keep it somewhere secure and never share it.',
+      migrateLegacy: 'Move old message to safer protection button. It puts the opened message in the message box, chooses the recommended method, and removes the old key from the box. Enter a new long access key and protect the message again. The old method is unsafe.',
+      rsaFingerprint: 'Public key fingerprint. Compare the whole fingerprint with the owner through a separate trusted way before using this key. Matching fingerprints show that the keys match; they do not prove who the owner is.',
+      fileInput: 'Choose a file. Pick the file you want to protect, or a protected file you want to open. File protection always uses the access key and AES-GCM, no matter which message method is selected.',
+      fileEncrypt: 'Protect and save file button. It protects the chosen file with your access key and saves a new protected file.',
+      fileDecrypt: 'Open and save file button. It checks the protected file as it opens it, then saves the opened file. Use the same access key used to protect it.',
+      hashDropzone: 'File check area. Drop one or more files here, or choose them from your device. The app checks them on your device and does not send them anywhere.',
+      hashInput: 'Choose files to check. The app makes a short code for each file using the methods you selected.',
+      hashSelected: 'Chosen files. This shows which files are ready to check.',
+      hashOutput: 'File check results. Each code helps compare a file with a copy you trust. Compare the whole code, not just the beginning.',
+      md5: 'MD5 makes a short code for a file. It is useful for older systems or spotting duplicates, but it is not safe for checking that a file is genuine.',
+      sha1: 'SHA one makes a code for a file. Some older systems still need it, but it is not safe for important file checks.',
+      sha256: 'SHA two fifty-six makes a code for a file and is a good default for checking a download. Compare the whole code with one from a source you trust.',
+      sha512: 'SHA five twelve makes a longer code for a file. Use it when the maker or system asks for it. Compare the whole code with one from a source you trust.'
     };
     if (id === 'narrLanguage') return getControlNarration(id, narrationLanguage);
     if (id === 'voxB') return getControlNarration(id, narrationLanguage);
-    if (id === 'sfxB') return getControlNarration(id, narrationLanguage);
     if (id === 'eye') return getControlNarration(id, narrationLanguage);
     if (id === 'aesKeySizeHint') return guides.aesKeySize;
     if (id === 'aesKeySize' || id === 'rsaKeySize') return guides[id];
@@ -776,6 +749,7 @@ export function createAudioController({ isLocked }) {
     if (id === 'rsaKeyModeHint' || id === 'rsaKeySummary' || id === 'rsaBackupReminder') return guides.rsaKeyMode;
     if (id === 'fingerprintStatus') return guides.rsaFingerprint;
     if (id === 'fileHint') return guides.fileInput;
+    if (id === 'hashDropzone' || id === 'hashInput' || id === 'hashSelected' || id === 'hashOutput') return guides[id];
     if (id === 'fileStatus') return $('fileStatus').textContent || guides.fileInput;
     if (id === 'operationStatus') return $('operationStatus').textContent || guides.mode;
     if (id === 'migrationStatus') return $('migrationStatus').textContent || guides.migrateLegacy;
@@ -793,16 +767,9 @@ export function createAudioController({ isLocked }) {
     return null;
   }
 
-  let lastAnnouncement = '';
-  let lastAnnouncementTime = 0;
   function announceMessage(message) {
     if (!narrationRunning || isLocked() || document.hidden) return;
     if (!message) return;
-    const now = Date.now();
-    if (message === lastAnnouncement && now - lastAnnouncementTime < 1200) return;
-    lastAnnouncement = message;
-    lastAnnouncementTime = now;
-    clearTimeout(narrationTimer);
     narrationGeneration++;
     const generation = narrationGeneration;
     window.speechSynthesis.cancel();
@@ -821,7 +788,6 @@ export function createAudioController({ isLocked }) {
         if (generation !== narrationGeneration) return;
         narration.classList.remove('active');
         light.classList.remove('active');
-        narrationTimer = setTimeout(() => say(generation), 1500);
       };
       utterance.onerror = () => {
         failNarration(generation);
@@ -833,16 +799,49 @@ export function createAudioController({ isLocked }) {
   }
 
   function announceContext(event) {
-    if (event.type === 'click' &&
-        event.target.closest?.('input,textarea,select,button')) return;
+    if (event.type !== 'click') return;
+    const target = event.target;
+    // Find a nearby interactive control first; prefer a selector that includes the hash dropzone
+    const element = target?.closest?.(
+      'input,textarea,select,button,label,.field-hint,.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
+    );
+    if (!element) return;
+    // Ignore narration toggle and selects opening
+    if (element.id === 'voxB' || element.tagName === 'SELECT') return;
+    // If this was a hash-algorithm click (a checkbox inside the algorithms area), ignore here so
+    // the change handler can announce the algorithm change explicitly.
+    const hashAlgorithmInput = element.name === 'hashAlgorithm'
+      ? element
+      : element.querySelector?.('input[type="checkbox"][name="hashAlgorithm"]');
+    if (hashAlgorithmInput) return;
     announceMessage(getContextualGuide(event.target));
   }
 
   function announceStatus(status) {
+    const statusKey = status === 'messageEncrypted' && narrationMode === 'legacy'
+      ? 'messageEncryptedLegacy'
+      : status;
     const message = status === 'rsaKeyGenerated'
       ? getRsaGeneratedNarration(narrationLanguage, narrationRsaKeyBits, narrationMode)
-      : STATUS_NARRATION[narrationLanguage]?.[status];
+      : STATUS_NARRATION[narrationLanguage]?.[statusKey] || STATUS_NARRATION.en[statusKey];
     if (!message) return false;
+    announceMessage(message);
+    return true;
+  }
+
+  function announceLanguageChanged(language) {
+    if (!NARRATION_LANGUAGES[language]) return false;
+    announceMessage(LANGUAGE_CHANGE_NARRATION[language]);
+    return true;
+  }
+
+  function announceHashAlgorithm(algorithm, selected = true) {
+    const guide = HASH_ALGORITHM_GUIDES[algorithm];
+    if (!guide) return false;
+    const label = { md5: 'MD5', sha1: 'SHA one', sha256: 'SHA two fifty-six', sha512: 'SHA five twelve' }[algorithm];
+    const message = selected
+      ? guide
+      : `${label} is unchecked, so it will not be included in the file check.`;
     announceMessage(message);
     return true;
   }
@@ -902,11 +901,6 @@ export function createAudioController({ isLocked }) {
     return reset;
   }
 
-  toggle($('sfxB'), 'Sounds: On', 'Sounds: Off', async enabled => {
-    if (enabled) await getContext();
-    soundEffects = enabled;
-    if (enabled) playTone('click');
-  });
   resetNarrationToggle = toggle($('voxB'), 'Narration: On', 'Narration: Off', async enabled => {
     if (enabled) {
       return startNarration();
@@ -916,34 +910,39 @@ export function createAudioController({ isLocked }) {
     }
   });
 
+  $('mode').addEventListener('change', () => {
+    setNarrationMode($('mode').value, true);
+  });
   narrationLanguageSelect.addEventListener('change', () => {
     setNarrationLanguage(narrationLanguageSelect.value);
+    announceLanguageChanged(narrationLanguageSelect.value);
+  });
+  $('aesKeySize').addEventListener('change', () => {
+    setNarrationKeySize(Number($('aesKeySize').value), true);
   });
   $('rsaKeySize').addEventListener('change', handleRsaKeySizeChange);
   if (speech) window.speechSynthesis.onvoiceschanged = () => { voice = pickVoice(narrationLanguage); };
-  document.addEventListener('focusin', announceContext);
   document.addEventListener('click', announceContext);
   document.addEventListener('visibilitychange', () => {
-    if (context) {
-      if (document.hidden) context.suspend().catch(reportError);
-      else if (soundEffects) context.resume().catch(reportError);
+    if (document.hidden && speech) {
+      window.speechSynthesis.cancel();
+      narration.classList.remove('active');
+      light.classList.remove('active');
     }
-    if (document.hidden && speech) window.speechSynthesis.pause();
-    else if (narrationEnabled && speech) window.speechSynthesis.resume();
   });
 
   return {
-    play: playTone,
     setNarrationMode,
     setNarrationKeySize,
     setNarrationRsaKeySize,
     setNarrationLanguage,
     announceStatus,
+    announceLanguageChanged,
+    announceHashAlgorithm,
     reset() {
-      soundEffects = narrationEnabled = false;
+      narrationEnabled = false;
       stopNarration();
       toggles.forEach(reset => reset());
-      if (context && context.state !== 'closed') context.suspend().catch(reportError);
     }
   }
 }

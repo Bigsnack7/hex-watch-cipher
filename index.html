@@ -32,7 +32,6 @@
         <option value="fr">Narration: French</option>
       </select>
       <button id="voxB" aria-label="Toggle narration" aria-pressed="false" title="Toggle narration">Narration: Off</button>
-      <button id="sfxB" aria-label="Toggle sound effects" aria-pressed="false" title="Toggle sound effects">Sounds: Off</button>
     </div>
   </div>
   <p class="audio-status" id="audioStatus" role="status" aria-live="polite"></p>
@@ -128,6 +127,29 @@
           <button type="button" id="fileDecrypt">Decrypt and download file</button>
         </div>
         <p id="fileStatus" class="field-hint" role="status" aria-live="polite" aria-atomic="true"></p>
+      </section>
+      <section class="hash-tools" aria-labelledby="hash-title">
+        <div class="panel-heading">
+          <div><h2 id="hash-title">File hash calculator</h2><p>Compute MD5, SHA-1, SHA-256, and SHA-512 locally in your browser.</p></div>
+        </div>
+        <div id="hashDropzone" class="hash-dropzone" tabindex="0" role="button" aria-label="Select files to hash">
+          <input id="hashInput" type="file" multiple hidden>
+          <div class="hash-drop-text">
+            Drop files here or click to select
+            <span>and hash them all</span>
+          </div>
+        </div>
+        <div class="hash-picker-row">
+          <label class="hash-choose" for="hashInput">Choose files</label>
+          <span id="hashSelected" class="hash-selected">No file chosen</span>
+        </div>
+        <div class="hash-algorithms" aria-label="Hash algorithms">
+          <label><input type="checkbox" name="hashAlgorithm" value="md5" checked> MD5</label>
+          <label><input type="checkbox" name="hashAlgorithm" value="sha1" checked> SHA1</label>
+          <label><input type="checkbox" name="hashAlgorithm" value="sha256" checked> SHA256</label>
+          <label><input type="checkbox" name="hashAlgorithm" value="sha512" checked> SHA512</label>
+        </div>
+        <div id="hashOutput" class="hash-output" aria-live="polite"></div>
       </section>
     </section>
     <aside class="right-column">
