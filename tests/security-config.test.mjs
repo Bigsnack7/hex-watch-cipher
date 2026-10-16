@@ -99,13 +99,22 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(app, /audio\.announceStatus\('legacyMigrationPrepared'\)/);
   assert.match(app, /anchor\.download=filename;[\s\S]*?anchor\.click\(\);[\s\S]*?setTimeout\(\(\)=>anchor\.remove\(\),0\)/);
   assert.match(app, /triggerDownload\(new Blob\(\[lastEncryptedToken\],\{type:'text\/plain;charset=utf-8'\}\),'encrypted-message\.txt'\)/);
+  assert.match(app, /function invalidateMessageResult\(\)\{\s*setMessageDownload\(null\);\s*clearLegacyMigration\(\);\s*show\(EMPTY\);\s*\}/);
+  assert.match(app, /mode\.addEventListener\('change',\(\)=>\{invalidateMessageResult\(\);refresh\(\)\}\)/);
+  assert.match(app, /\$\('aesKeySize'\)\.addEventListener\('change',\(\)=>\{invalidateMessageResult\(\);refresh\(\)\}\)/);
+  assert.match(app, /\$\('rsaKeySize'\)\.addEventListener\('change',\(\)=>\{invalidateMessageResult\(\);refresh\(\)\}\)/);
+  assert.match(app, /inp\.addEventListener\('input',invalidateMessageResult\)/);
+  assert.match(app, /\$\('key'\)\.addEventListener\('input',invalidateMessageResult\)/);
   assert.match(app, /else if\(selected==='legacy'\)\s*\{\s*if\(!pw\).*?r=encryptGrumpyV2\(raw,pw\);/s);
   assert.match(app, /if\(dec&&selected==='legacy'\)\s*\{\s*legacyMigrationText=r;/);
   assert.match(app, /mode\.value='aes';\s*key\.value='';/);
   assert.match(app, /onLock:clearSensitiveWorkspace/);
   assert.match(app, /function clearSensitiveWorkspace\(\)\{[\s\S]*?clearLegacyMigration\(\);/);
+  assert.match(app, /function clearHashWorkspace\(\)\{\s*hashGeneration\+\+;\s*hashInput\.value='';\s*hashSelected\.textContent='No file chosen';\s*hashOutput\.replaceChildren\(\);\s*\}/);
+  assert.match(app, /function clearSensitiveWorkspace\(\)\{[\s\S]*?clearHashWorkspace\(\);/);
+  assert.match(app, /clrB\.addEventListener\('click',\(\)=>\{[\s\S]*?clearHashWorkspace\(\);/);
   assert.match(app, /function clearLegacyMigration\(\)/);
-  assert.match(app, /inp\.addEventListener\('input',\(\)=>\{clearLegacyMigration\(\)/);
+  assert.match(app, /inp\.addEventListener\('input',invalidateMessageResult\)/);
   const legacy = await readFile(new URL('js/crypto/legacy.mjs', root), 'utf8');
   assert.match(legacy, /export function encryptGrumpyV2/);
   assert.match(legacy, /export function decryptGrumpyV2/);
@@ -151,14 +160,12 @@ test('reload starts with cleared sensitive fields and no persisted crypto state'
   assert.doesNotMatch(app, /\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b|\bdocument\.cookie\b/);
 });
 
-test('ambient audio controls and playback code are fully removed', async () => {
+test('sound-effects controls and playback code are fully removed', async () => {
   const html = await readFile(new URL('index.html', root), 'utf8');
   const audio = await readFile(new URL('js/ui/audio.mjs', root), 'utf8');
   const readme = await readFile(new URL('README.md', root), 'utf8');
-  assert.doesNotMatch(html, /Ambient|ambient|musB/);
-  assert.doesNotMatch(audio, /ambient|startAmbient|stopAmbient|musB/);
-  assert.doesNotMatch(readme, /ambient audio|ambient sound/i);
+  assert.doesNotMatch(html, /Ambient|ambient|musB|sfxB|Sounds: Off/);
+  assert.doesNotMatch(audio, /ambient|startAmbient|stopAmbient|musB|sfxB|soundEffects|playTone|function getContext\s*\(|AudioContext|createOscillator/);
+  assert.doesNotMatch(readme, /ambient audio|ambient sound|sound effects/i);
   assert.match(html, /id="voxB"/);
-  assert.match(html, /id="sfxB"/);
-  assert.match(audio, /toggle\(\$\('sfxB'\)/);
 });

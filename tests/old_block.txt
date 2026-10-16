@@ -1,0 +1,1 @@
+﻿const click = target => documentListeners.get('click')({ type: 'click', target });

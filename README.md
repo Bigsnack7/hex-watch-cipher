@@ -24,9 +24,9 @@
 
 ---
 
-Hex Watch Cipher is a static, client-side application for encrypting and decrypting messages and files. It offers password-based AES encryption, RSA public-key encryption, chunked file encryption, legacy-format compatibility, multilingual narration, optional interface sounds, and a privacy lock. It produces encrypted data for you to share through a separate channel; it is not a messaging service.
+Hex Watch Cipher is a static, client-side security workspace for protecting text and files, checking file digests, and learning what the selected cryptographic options mean. It combines password-based encryption, recipient-oriented RSA encryption, chunked file encryption, legacy-message migration, optional multilingual narration, and a privacy lock in one responsive browser interface.
 
-Modern encryption and decryption run in the browser through the Web Crypto API; **Grumpy v2** is a separate JavaScript cipher retained only for legacy compatibility. There is no application backend, account system, remote key storage, or recovery service. The app does not verify who you are communicating with.
+The app creates encrypted output for the user to transfer through a separate channel; it is not a messaging service. Modern encryption and decryption run in the browser through the Web Crypto API; **Grumpy v2** is a separate JavaScript cipher retained only for legacy compatibility. There is no application backend, account system, remote key storage, or recovery service, and the app does not independently verify who you are communicating with.
 
 > [!CAUTION]
 > **Use AES-GCM for new password-protected messages, or verified RSA hybrid encryption when encrypting to a recipient's public key.** Direct RSA is suitable only for very short messages. The legacy Grumpy v2 cipher is insecure and must not be used to protect sensitive information. Browser-side encryption cannot protect data from a compromised device, browser, application code, or hosting origin.
@@ -38,7 +38,8 @@ Modern encryption and decryption run in the browser through the Web Crypto API; 
 - [Text encryption details](#text-encryption-details)
 - [RSA keys and fingerprints](#rsa-keys-and-fingerprints)
 - [File encryption](#file-encryption)
-- [Narration and sound](#narration-and-sound)
+- [File hash calculator](#file-hash-calculator)
+- [Narration](#narration)
 - [Recommended workflows](#recommended-workflows)
 - [Quick start](#quick-start)
 - [Browser support and accessibility](#browser-support-and-accessibility)
@@ -48,22 +49,36 @@ Modern encryption and decryption run in the browser through the Web Crypto API; 
 - [Tests](#tests)
 - [Troubleshooting](#troubleshooting)
 - [Project layout](#project-layout)
+- [Implementation overview](#implementation-overview)
 - [Security model and limitations](#security-model-and-limitations)
 - [Recommended HTTP security headers](#recommended-http-security-headers)
 - [Author](#author)
 
 ## Features
 
-- Encrypt and decrypt text locally using AES-GCM, authenticated AES-CBC compatibility mode, RSA hybrid encryption, or direct RSA for short messages.
-- Select a 128-, 192-, or 256-bit derived key for AES-GCM.
-- Generate 2048-, 3072-, or 4096-bit RSA-OAEP key pairs, import and export RSA PEM keys, and compare SHA-256 public-key fingerprints.
-- Encrypt files with chunked AES-256-GCM, including files up to 1 GiB; decrypt earlier HWF1 files up to 1 MiB.
-- Copy results and RSA PEM keys; download encrypted text tokens; and use supported browser save-file pickers for large file operations.
-- Hear narration in English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, or French; voice availability depends on the browser's installed speech voices.
-- Get narration for the selected encryption method, key sizes, focused controls, operation outcomes, validation failures, and the legacy migration handoff. Message contents, keys, and decrypted output are never read aloud.
-- Automatically clear sensitive workspace fields after five minutes of inactivity or on a `pagehide` event. The lock requires no password and is designed only to reduce casual viewing.
-- Prevent overlapping crypto operations and lock the related inputs while work is pending, so keys, methods, and source data cannot change mid-operation.
-- Responsive interface with keyboard shortcuts, operation status, file progress, and screen-reader status announcements.
+### Text protection and key management
+
+- Encrypt and decrypt text with password-based AES-GCM, authenticated AES-CBC compatibility mode, RSA-OAEP hybrid encryption, direct RSA for short messages, or the RSA-first dual-key envelope.
+- Choose 128-, 192-, or 256-bit derived AES-GCM keys. New tokens record the selected key size; older `CT1.` AES-256-GCM tokens remain supported.
+- Generate 2048-, 3072-, or 4096-bit RSA-OAEP key pairs, import and export supported RSA PEM keys, and compare SHA-256 fingerprints of public keys.
+- Keep generated RSA private keys non-extractable in page memory by default, or explicitly choose exportable PEM when a user-managed backup is required.
+- Copy results and public/private PEM keys when available, and download encrypted text tokens without including the passphrase or private key.
+- Migrate decrypted Grumpy v2 text into the AES-GCM workflow. The legacy cipher is marked insecure and is not suitable for protecting new or sensitive content.
+
+### File protection and integrity checking
+
+- Encrypt files up to 1 GiB using 4 MiB chunks of authenticated AES-256-GCM; decrypt supported HWF1 legacy files up to 1 MiB.
+- Use a separate file hash calculator for one or more local files. Select algorithms from MD5, SHA-1, SHA-256, and SHA-512, then compare the resulting digests with values obtained from a trusted source.
+- Select files through the browser picker or drag-and-drop for hashing. File encryption and hashing remain separate operations.
+- Report file progress and use the browser Save File picker for supported large-file operations; other browsers may need substantial memory to prepare downloads.
+
+### Guidance, accessibility, and workspace behavior
+
+- Hear optional narration in English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, or French. Available voices and pronunciation depend on the browser and operating system.
+- Receive contextual narration for method and key-size changes, control guidance, operation outcomes, errors, and legacy migration. Message contents, keys, and decrypted output are never read aloud.
+- Automatically clear sensitive workspace fields after five minutes of inactivity or on a `pagehide` event. This no-password privacy lock is intended to reduce casual viewing, not to authenticate users or guarantee secure erasure.
+- Prevent overlapping cryptographic operations and disable relevant inputs while an operation is pending, so the active method, keys, and source data cannot change mid-operation.
+- Use a responsive interface with visible keyboard focus, keyboard shortcuts, progress and operation status, and screen-reader status announcements.
 
 ## Encryption methods
 
@@ -146,11 +161,26 @@ File operations always use the **Access key** and chunked AES-256-GCM, regardles
 
 If streamed output fails, the app attempts to abort the incomplete save. Browser or filesystem behavior can still leave a partial file if aborting fails. Treat decrypted downloads as sensitive.
 
-## Narration and sound
+## File hash calculator
 
-Narration is optional and uses the browser's built-in speech synthesis. Select a narration language in the header and turn narration on. It follows the selected method and AES/RSA key sizes, explains focused controls, and announces message and file operation outcomes, validation failures, and legacy-migration instructions without reading message contents, keys, or decrypted output aloud. With narration enabled, selecting an RSA key size announces the chosen 2048-, 3072-, or 4096-bit size; the RSA method and key-generation guidance also reflect that selection. If speech playback fails, narration switches off and displays an error.
+The file hash calculator is a separate integrity-checking tool; **hashing does not encrypt a file**. It reads selected files in the browser and displays the requested digest values without intentionally uploading the files. Add one or more files by dropping them onto the file-check area or by using **Choose files**. Select or clear any of the MD5, SHA-1, SHA-256, and SHA-512 options; all four are selected by default. Changing the selected algorithms recalculates the current selection.
 
-Available guide languages are **English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, and French**. Spoken voice availability and pronunciation depend on voices installed in the browser or operating system; a browser may synthesize speech with its default voice when a matching voice is unavailable. Sound effects are optional and controlled separately. Both features run locally; message content and keys are not sent to a speech service.
+| Algorithm | Digest size | Guidance |
+| --- | ---: | --- |
+| MD5 | 128 bits | Kept for compatibility with older systems. It is not collision-resistant and must not be used for security-sensitive integrity checks. |
+| SHA-1 | 160 bits | Kept for compatibility. It is not collision-resistant and must not be used for security-sensitive integrity checks. |
+| SHA-256 | 256 bits | Recommended general-purpose choice for comparing file integrity. |
+| SHA-512 | 512 bits | Strong general-purpose option that produces a longer digest. |
+
+A matching digest is useful only when the expected digest comes from a source you trust. If an attacker can replace both a file and its published digest, comparing them does not establish authenticity. These hashes are unkeyed: they do not prove who created a file, and they do not replace a digital signature or a message authentication code.
+
+The calculator works through the browser's File API and Web Crypto API for SHA-1/SHA-256/SHA-512; its MD5 implementation is included for compatibility. Each selected file is read into memory to calculate its digest, so hashing very large files can require substantial memory. Files are processed one at a time, and the result area reports each selected algorithm for each file. Hashing and file encryption are independent: the hash calculator does not change, encrypt, upload, or download the selected files.
+
+## Narration
+
+Narration is optional and uses the browser's built-in speech synthesis. Select a narration language in the header and turn narration on. Turning it on does not start speech. After that, clicking a control or starting an operation can trigger guidance; selecting a new method, key size, hash algorithm, or narration language announces the new choice, while simply opening a dropdown or focusing a control stays quiet. Narration does not repeat guides. English guidance uses plain, respectful language to explain the selected method, key sizes, clicked controls, and common tasks. The AES key-size guide explains what a key and a bit are, what the sizes do, how to choose between them, and why a longer key does not replace a strong access key. The RSA key-size guide explains public and private keys, how RSA size affects work and short-message limits, why RSA and AES bit counts are not directly comparable, and when the hybrid method is a better fit. Changing the encryption method or a key size announces the updated choice. For direct RSA and RSA-first dual-key messages, the displayed limit is based on the selected size for newly generated keys; pasted or imported keys use their own modulus size and limit. Narration also announces message, file, and file-check results, errors, and legacy-message migration steps without reading message contents, keys, or decrypted output aloud. Legacy Grumpy v2 encryption completion is explicitly identified as unsafe and advises re-encrypting with AES-GCM. Important limits and key-safety warnings are included. If speech playback fails, narration switches off and displays an error.
+
+Available guide languages are **English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, and French**. Spoken voice availability and pronunciation depend on voices installed in the browser or operating system; a browser may synthesize speech with its default voice when a matching voice is unavailable. Narration runs locally; message content and keys are not sent to a speech service.
 
 ## Recommended workflows
 
@@ -206,13 +236,13 @@ Grumpy v2 messages do not use the modern token prefixes. Select the legacy metho
 
 Message encryption/decryption, file encryption/decryption, and RSA key generation run as one operation at a time. While an operation is pending, the app disables the related controls—including keys, method and key-size selectors, source text, file selection, and key actions—so the inputs cannot change underneath it. Repeated clicks or keyboard shortcuts do not start another operation. File progress and operation status remain visible to assistive technology.
 
-Use **Clear** when you want to remove the current message, result, selected file, and file status while continuing to use the current passphrase or RSA key. It does not cancel a pending operation, erase passphrases or private keys, remove a downloaded file, or securely wipe browser memory. The privacy lock clears sensitive fields and private-key material, invalidates pending UI results, and requires an explicit fresh-workspace resume. Do not rely on it as authentication or guaranteed secure erasure.
+Use **Clear** when you want to remove the current message, result, selected encryption or hash-check file, hash results, and file status while continuing to use the current passphrase or RSA key. Clearing the hash panel also invalidates any in-progress calculation so it cannot repopulate results afterward. Editing the message or access key, changing an encryption method or key size, or editing RSA key material clears the displayed message result and disables its download action. This prevents a result encrypted with previous inputs from appearing current. Clear does not cancel a pending encryption operation, erase passphrases or private keys, remove a downloaded file, or securely wipe browser memory. The privacy lock clears sensitive fields, selected files and hash results, invalidates pending UI and hash results, and requires an explicit fresh-workspace resume. Do not rely on it as authentication or guaranteed secure erasure.
 
 ## Browser support and accessibility
 
-Use a modern browser with the Web Crypto API. Browsers generally expose cryptographic APIs only in a secure context, such as `localhost` or HTTPS; direct `file://` use may not work. Speech synthesis, Web Audio sound effects, and the File System Access save picker are optional browser features. If the save picker is unavailable, downloads use a browser-generated Blob and may need substantial memory for large files.
+Use a modern browser with the Web Crypto API. Browsers generally expose cryptographic APIs only in a secure context, such as `localhost` or HTTPS; direct `file://` use may not work. Speech synthesis and the File System Access save picker are optional browser features. If the save picker is unavailable, downloads use a browser-generated Blob and may need substantial memory for large files. Hashing uses the browser's file-reading APIs; the SHA digest algorithms also require Web Crypto.
 
-The interface labels its controls, exposes operation, file, output, fingerprint, and lock updates through live status regions, and supports `Ctrl`/`⌘` + `Enter` to encrypt and `Ctrl`/`⌘` + `Shift` + `Enter` to decrypt. Narration is a separate convenience feature and does not replace screen-reader support or the visible status messages.
+The responsive interface uses the logo's violet and near-black palette, with a two-column desktop workspace that collapses for smaller screens. Controls have visible keyboard focus, labels, and status messages. Operation, file, output, fingerprint, and lock updates are exposed through live status regions. The app supports `Ctrl`/`⌘` + `Enter` to encrypt and `Ctrl`/`⌘` + `Shift` + `Enter` to decrypt. Narration is a separate convenience feature and does not replace screen-reader support or the visible status messages.
 
 ## Limits and behavior
 
@@ -233,7 +263,7 @@ Inputs are validated before cryptographic processing where practical. User-facin
 
 The app does not intentionally transmit message contents, files, passphrases, or private keys to an application server. It does not persist them in `localStorage`, `sessionStorage`, `IndexedDB`, or cookies. Cryptographic operations use the browser's Web Crypto API. A deployed website still supplies the HTML, scripts, styles, and images — a compromised hosting origin can deliver code that reads data before encryption or after decryption.
 
-After five minutes without a tracked interaction, or when a page-lifecycle `pagehide` event occurs, the workspace locks. Sensitive message and result fields, passphrases, and private keys are cleared; narration and sound effects stop; controls are disabled until the user explicitly resumes with a fresh workspace. The RSA public key is retained. Switching tabs alone does not necessarily trigger the lock. The lock has no password, is not an authentication boundary, and cannot guarantee secure erasure from browser memory.
+After five minutes without a tracked interaction, or when a page-lifecycle `pagehide` event occurs, the workspace locks. Sensitive message and result fields, passphrases, private keys, selected files, and hash results are cleared; narration stops; in-progress UI/hash results are invalidated; controls are disabled until the user explicitly resumes with a fresh workspace. The RSA public key is retained. Switching tabs alone does not necessarily trigger the lock. The lock has no password, is not an authentication boundary, and cannot guarantee secure erasure from browser memory.
 
 Text-token downloads contain only the encrypted token, never the passphrase or private key. Check that output is encrypted before downloading or sharing it; downloading legacy ciphertext or ciphertext made with a weak passphrase does not make it safe.
 
@@ -275,11 +305,12 @@ The suite covers AES-GCM key sizes and legacy tokens, CBC-HMAC, direct RSA, stan
 
 Use a current browser on `localhost` or HTTPS. Keep any sample keys and passphrases temporary and do not use production secrets for testing.
 
-1. Encrypt and decrypt an empty message and a Unicode message with AES-GCM. Confirm the `CT2.` token decrypts with the same passphrase and that a wrong passphrase, modified token, and malformed token fail without displaying plaintext.
-2. Generate an RSA key pair and confirm the displayed SHA-256 fingerprint. For exportable keys, export and re-import the public/private PEM pair and confirm the fingerprint is unchanged. Test an RSA1 hybrid round trip and RSA3 dual-key round trip; verify RSA3 fails with a wrong passphrase or mismatched private key.
+1. Encrypt and decrypt an empty message and a Unicode message with AES-GCM (`CT2.`) and CBC-HMAC (`CBC1.`). Confirm each token decrypts with the correct passphrase and that a wrong passphrase, modified token, and malformed token fail without displaying plaintext.
+2. Generate an RSA key pair and confirm the displayed SHA-256 fingerprint. For exportable keys, export and re-import the public/private PEM pair and confirm the fingerprint is unchanged. Test RSA1 hybrid, RSA2 direct, and RSA3 dual-key round trips. Confirm RSA2 and RSA3 enforce the selected key's short-message byte limit, and that RSA3 fails with a wrong passphrase or mismatched private key.
 3. Encrypt and decrypt empty, small, and multi-chunk files. Compare the original and recovered bytes; also try a wrong passphrase and a modified or truncated encrypted file.
-4. Start a password-based or RSA operation and verify relevant inputs and actions remain disabled while it is pending and become available afterward. Trigger the privacy lock during work, if practical, and confirm stale results are not restored when the workspace resumes.
-5. Verify the keyboard shortcuts, visible status messages, narration controls if supported, and that selecting **Clear** removes message/file/output data without clearing the active key material.
+4. Select Grumpy v2 only to check legacy compatibility; confirm the migration action moves the opened text back to the message field and that it can then be protected with AES-GCM.
+5. Start a password-based or RSA operation and verify relevant inputs and actions remain disabled while it is pending and become available afterward. Confirm editing the message or key, changing the method or key size, or changing RSA key material clears the previous output and disables its download action. Trigger the privacy lock during work, if practical, and confirm stale results are not restored when the workspace resumes.
+6. Verify the keyboard shortcuts and visible status messages. If speech synthesis is supported, confirm enabling narration and opening dropdowns stay quiet, changing the narration language, encryption method, AES/RSA key size, or hash algorithm announces the new selection, legacy encryption completion warns that Grumpy v2 is unsafe, and the direct-RSA message limit matches the selected generated-key size. Selecting **Clear** should remove message, file, and hash selections/results without clearing the active passphrase or RSA key.
 
 ### Troubleshooting
 
@@ -295,7 +326,7 @@ Use a current browser on `localhost` or HTTPS. Keep any sample keys and passphra
 ```text
 index.html                     Application markup and CSP meta policy
 css/
-  styles.css                   Responsive interface, theme, focus and status styling
+  styles.css                   Responsive violet enterprise theme, focus and status styling
 js/
   app.js                       UI wiring, operations, downloads, and lock integration
   crypto.mjs                   Crypto API re-exports
@@ -310,7 +341,7 @@ js/
     pem.mjs                    RSA PEM parsing and formatting
     shared.mjs                 Encodings, limits, KDF settings, and token helpers
   ui/
-    audio.mjs                  Narration, language guides, and sound effects
+    audio.mjs                  Narration and language guides
     workspace-lock.mjs         Inactivity and page-lifecycle privacy lock
 assets/
   hex-watch.svg                SVG logo and favicon
@@ -324,6 +355,19 @@ tests/
   workspace-lock-ui.test.mjs   Workspace lock integration tests
 ```
 
+## Implementation overview
+
+Hex Watch Cipher is a static web application: the browser loads `index.html`, its local stylesheet, the JavaScript modules, and the local logo assets. The application does not require a runtime package manager, build step, database, API server, or account service. The browser's Web Crypto API provides the modern encryption primitives; `js/crypto/legacy.mjs` is intentionally isolated as an insecure compatibility implementation for old Grumpy v2 messages.
+
+- `index.html` defines the workspace, controls, accessible status regions, and restrictive Content Security Policy meta policy.
+- `css/styles.css` contains the responsive layout, brand-aligned violet appearance, interaction states, and reduced-motion support.
+- `js/app.js` connects controls to encryption, decryption, file operations, hashing, narration, downloads, and privacy locking.
+- `js/crypto/` contains the focused cryptographic implementations and shared format, encoding, and input-limit helpers.
+- `js/ui/` contains narration and workspace-lock behavior; the lock timer is separately testable in `js/session-lock.mjs`.
+- `tests/` uses Node.js's built-in test runner to cover crypto formats, malformed inputs, user-facing errors, security policy, UI behavior, narration, and the workspace lock.
+
+Keep security-sensitive behavior in the relevant modules rather than adding inline scripts or remote dependencies. Any change to token formats, algorithms, key derivation, authenticated data, or file framing should update the related tests and documentation together. Run the automated suite and perform browser smoke tests after changes; tests do not establish that a design is secure or independently audited.
+
 ## Security model and limitations
 
 Hex Watch Cipher can protect encrypted text and file contents from someone who has only the token or encrypted file, provided the cryptography, randomness, browser, device, and delivered application code are trustworthy. It is not a complete secure communications system.
@@ -331,6 +375,7 @@ Hex Watch Cipher can protect encrypted text and file contents from someone who h
 - **Endpoint and code integrity** — Malware, a malicious browser extension, an unlocked device, compromised hosting, or modified application code can expose plaintext or keys.
 - **Passphrase guessing** — PBKDF2 makes guesses more expensive but cannot rescue a weak or reused passphrase. The 10-character minimum is not a strength score.
 - **Metadata** — Token prefixes, formats, and approximate message or file sizes remain visible.
+- **Hash limitations** — MD5 and SHA-1 are provided only for compatibility and are collision-broken. For security-sensitive file comparisons, use SHA-256 or SHA-512 and obtain the expected digest through a trusted channel.
 - **Identity and signatures** — Password encryption does not establish who created a message. RSA hybrid encryption does not sign messages; verify public-key fingerprints independently.
 - **Forward secrecy** — The app does not provide forward secrecy, key rotation, automatic key archival, or key recovery.
 - **Key loss** — A lost passphrase or non-extractable private key can make data unrecoverable. Exportable private-key backups require secure, user-managed storage.
