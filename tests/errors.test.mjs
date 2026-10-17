@@ -8,6 +8,8 @@ const messages = {
   nocrypto: 'Crypto unavailable.',
   operation: 'Encryption failed.',
   rsasizelimit: 'Direct RSA message is too long.',
+  signingkeyformat: 'Invalid signing key.',
+  signingkeymismatch: 'Signing keys do not match.',
   short: 'Key too short.',
   toolarge: 'Input too large.',
   filetoolarge: 'File too large.'
@@ -38,6 +40,9 @@ test('encryption errors never reveal arbitrary implementation details', () => {
     messages.auth
   );
   assert.equal(getUserErrorMessage(new Error('rsasizelimit'), false, messages), messages.rsasizelimit);
+  assert.equal(getUserErrorMessage(new Error('signingkeyformat'), false, messages), messages.signingkeyformat);
+  assert.equal(getUserErrorMessage(new Error('signingkeymismatch'), false, messages), messages.signingkeymismatch);
+  assert.equal(getUserErrorMessage(new Error('signingkeymismatch'), true, messages), DECRYPT_FAILURE_MESSAGE);
 });
 
 test('development diagnostics include only allowlisted error codes and omit secret details', () => {
