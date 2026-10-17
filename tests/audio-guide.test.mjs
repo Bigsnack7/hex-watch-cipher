@@ -70,8 +70,8 @@ test('clicked controls speak guidance for the currently selected method', async 
   const originalDocument = globalThis.document;
   const makeElement = id => ({
     id,
-    tagName: id === 'mode' ? 'SELECT' : 'BUTTON',
-    value: id === 'mode' ? 'aes' : '',
+    tagName: id === 'mode' || id === 'passphraseLength' || id === 'expectedHashAlgorithm' ? 'SELECT' : 'BUTTON',
+    value: id === 'mode' ? 'aes' : id === 'passphraseLength' ? '24' : '',
     textContent: '',
     attributes: new Map(),
     classList: { add() {}, remove() {} },
@@ -130,7 +130,9 @@ test('clicked controls speak guidance for the currently selected method', async 
     click('mode', 'SELECT');
     assert.equal(utterances.length, beforeSelectClick, 'opening a select must not narrate guidance for the old selection');
     change('mode', 'cbc');
+    assert.match(utterances.at(-1).text, /^AES-CBC with HMAC, compatibility mode\./);
     change('mode', 'aes');
+    assert.match(utterances.at(-1).text, /^AES-GCM, passphrase-based\./);
     assert.match(utterances.at(-1).text, /AES-256-GCM/);
     const oneShotCount = utterances.length;
     utterances.at(-1).onend();
@@ -153,8 +155,52 @@ test('clicked controls speak guidance for the currently selected method', async 
     change('aesKeySize', 128);
     assert.match(utterances.at(-1).text, /128 bits is already strong/);
 
+    change('passphraseLength', 32);
+    assert.match(utterances.at(-1).text, /Choose between 16 and 64 characters/);
+    assert.match(utterances.at(-1).text, /Selected length: 32 characters/);
+    const beforeGeneratorClick = utterances.length;
+    click('generatePassphrase', 'BUTTON');
+    assert.equal(utterances.length, beforeGeneratorClick, 'generator result narration is handled by its success/failure path');
+    const generatedKey = 'aB3!'.repeat(8);
+    elements.get('key').value = generatedKey;
+    assert.equal(controller.announcePassphraseResult({ generated: true }), true);
+    assert.match(utterances.at(-1).text, /Secure passphrase generated/);
+    assert.match(utterances.at(-1).text, /32 of 32 characters/);
+    assert.match(utterances.at(-1).text, /rough estimate, not a password audit/);
+    assert.equal((utterances.at(-1).text.match(/Use a unique passphrase/g) || []).length, 0);
+    assert.doesNotMatch(utterances.at(-1).text, new RegExp(generatedKey));
+    click('keyStrengthStatus');
+    assert.match(utterances.at(-1).text, /Access-key estimate: good, 75 out of 100/);
+    assert.match(utterances.at(-1).text, /avoid repeating a character pattern/);
+    const beforeExpectedAlgorithmClick = utterances.length;
+    click('expectedHashAlgorithm', 'SELECT');
+    assert.equal(utterances.length, beforeExpectedAlgorithmClick, 'opening an algorithm selector must not narrate guidance for the previous value');
+    change('expectedHashAlgorithm', 'sha512');
+    assert.match(utterances.at(-1).text, /same algorithm used by the digest/);
+    click('expectedHash', 'INPUT');
+    assert.match(utterances.at(-1).text, /reports Match or Mismatch/);
+    click('signMessage', 'INPUT');
+    assert.match(utterances.at(-1).text, /ECDSA P-256 signature/);
+    click('ecdsaPublicKey', 'TEXTAREA');
+    assert.match(utterances.at(-1).text, /trusted channel/);
+    click('verifySignature', 'BUTTON');
+    assert.match(utterances.at(-1).text, /without decrypting the message/);
+    assert.equal(controller.announceSignatureEvent('keyGenerated'), true);
+    assert.match(utterances.at(-1).text, /held in memory/);
+    assert.equal(controller.announceSignatureEvent('keyMismatch'), true);
+    assert.match(utterances.at(-1).text, /does not match the displayed public key/);
+    assert.equal(controller.announceSignatureEvent('decryptionFailed'), true);
+    assert.match(utterances.at(-1).text, /encrypted message could not be decrypted/);
+    controller.setNarrationLanguage('fr');
+    assert.equal(controller.announceSignatureEvent('verified'), true);
+    assert.match(utterances.at(-1).text, /La signature est valide/);
+    assert.equal(controller.announceSignatureEvent('decryptionFailed'), true);
+    assert.match(utterances.at(-1).text, /le message n’a pas pu être déchiffré/);
+    controller.setNarrationLanguage('en');
+
     const modeSelect = elements.get('mode');
     change('mode', 'cbc');
+    assert.match(utterances.at(-1).text, /^AES-CBC with HMAC, compatibility mode\./);
     assert.match(utterances.at(-1).text, /older encryption option/);
 
     const rsaSizeSelect = elements.get('rsaKeySize');
@@ -174,6 +220,7 @@ test('clicked controls speak guidance for the currently selected method', async 
     }
     modeSelect.value = 'rsa-direct';
     eventListeners.get(modeSelect).get('change')();
+    assert.match(utterances.at(-1).text, /^RSA-OAEP, direct encryption\./);
     assert.match(utterances.at(-1).text, /limit is 446 bytes/);
     assert.doesNotMatch(utterances.at(-1).text, /limit is 190 bytes/);
     const beforeRsaSelectClick = utterances.length;
@@ -185,11 +232,14 @@ test('clicked controls speak guidance for the currently selected method', async 
     assert.match(utterances.at(-1).text, /makes a 4096-bit public key and private key/);
 
     change('mode', 'cbc');
+    assert.match(utterances.at(-1).text, /^AES-CBC with HMAC, compatibility mode\./);
     assert.match(utterances.at(-1).text, /older encryption option/);
     change('mode', 'hybrid');
+    assert.match(utterances.at(-1).text, /^AES-GCM with RSA-OAEP, hybrid\./);
     assert.match(utterances.at(-1).text, /new one-time key/);
     assert.match(utterances.at(-1).text, /4096 bits/);
     change('mode', 'rsa-direct');
+    assert.match(utterances.at(-1).text, /^RSA-OAEP, direct encryption\./);
     click('key');
     assert.match(utterances.at(-1).text, /access key is not used/i);
     click('rsaPrivate', 'TEXTAREA');
@@ -198,11 +248,13 @@ test('clicked controls speak guidance for the currently selected method', async 
     assert.match(utterances.at(-1).text, /protects the chosen file with your access key/i);
     assert.doesNotMatch(utterances.at(-1).text, /RSA Hybrid is the recommended/);
     change('mode', 'rsa-aes');
+    assert.match(utterances.at(-1).text, /^RSA-OAEP with AES-GCM, dual-key\./);
     controller.announceStatus('rsaKeyGenerated');
     assert.match(utterances.at(-1).text, /limit is 446 bytes/);
     click('key');
     assert.match(utterances.at(-1).text, /shared access key/);
     change('mode', 'legacy');
+    assert.match(utterances.at(-1).text, /^Grumpy v2, legacy cipher\./);
     assert.match(utterances.at(-1).text, /This old method is not safe/);
     assert.equal(elements.get('ntext').textContent, `"${utterances.at(-1).text}"`);
     controller.announceStatus('messageEncrypted');
@@ -242,6 +294,7 @@ test('changing the narration language updates active speech and its speech-synth
     textContent: '',
     attributes: new Map(),
     classList: { add() {}, remove() {} },
+    closest() { return this; },
     addEventListener(name, handler) {
       const listeners = elementListeners.get(this) || new Map();
       listeners.set(name, handler);
@@ -298,6 +351,7 @@ test('changing the narration language updates active speech and its speech-synth
     modeSelect.value = 'aes';
     elementListeners.get(modeSelect).get('change')();
     assert.equal(utterances.at(-1).lang, 'ig-NG');
+    assert.match(utterances.at(-1).text, /^AES-GCM, passphrase-based\./);
     // Accept either the last utterance or any recent utterance mentioning the mode guide in Igbo.
     assert.ok(utterances.some(u => /Usoro izochi ozi ị họọrọ/.test(u.text)), 'mode narration in Igbo should be present');
     const beforeLanguageSelectClick = utterances.length;
@@ -326,9 +380,10 @@ test('changing the narration language updates active speech and its speech-synth
     click('encB');
     assert.equal(utterances.at(-1).lang, 'fr-FR');
     assert.match(utterances.at(-1).text, /Pour chiffrer/);
-    modeSelect.value = 'aes';
+    modeSelect.value = 'hybrid';
     elementListeners.get(modeSelect).get('change')();
     assert.equal(utterances.at(-1).lang, 'fr-FR');
+    assert.match(utterances.at(-1).text, /^AES-GCM with RSA-OAEP, hybrid\./);
     assert.match(utterances.at(-1).text, /La méthode de chiffrement que vous avez choisie/);
 
     languageSelect.value = 'pcm';
@@ -336,6 +391,7 @@ test('changing the narration language updates active speech and its speech-synth
     modeSelect.value = 'cbc';
     elementListeners.get(modeSelect).get('change')();
     assert.equal(utterances.at(-1).lang, 'en-NG');
+    assert.match(utterances.at(-1).text, /^AES-CBC with HMAC, compatibility mode\./);
     assert.equal(utterances.at(-1).voice.lang, 'en-GB', 'Pidgin falls back to an installed English voice');
     assert.match(utterances.at(-1).text, /Na method wey you choose/);
     controller.reset();
@@ -414,7 +470,7 @@ test('speech playback errors stop narration and reset its control', async () => 
     assert.equal(utterances.length, 0, 'turning narration on should not play speech automatically');
     documentListeners.get('click')({
       type: 'click',
-      target: { closest: () => ({ id: 'mode', tagName: 'SELECT' }) }
+      target: { closest: () => ({ id: 'encB', tagName: 'BUTTON' }) }
     });
     // After a failed attempt, the UI should show narration as off and an error status.
     assert.ok(elements.get('ntext').textContent === 'Off' || elements.get('ntext').textContent === '', 'narration text shows Off or is empty');
@@ -424,7 +480,7 @@ test('speech playback errors stop narration and reset its control', async () => 
     await click();
     documentListeners.get('click')({
       type: 'click',
-      target: { closest: () => ({ id: 'mode', tagName: 'SELECT' }) }
+      target: { closest: () => ({ id: 'encB', tagName: 'BUTTON' }) }
     });
     utterances.at(-1).onerror();
     // Playback error handlers should result in narration being stopped and an error status shown.
@@ -435,7 +491,7 @@ test('speech playback errors stop narration and reset its control', async () => 
     await click();
     documentListeners.get('click')({
       type: 'click',
-      target: { closest: () => ({ id: 'mode', tagName: 'SELECT' }) }
+      target: { closest: () => ({ id: 'encB', tagName: 'BUTTON' }) }
     });
     controller.announceStatus('messageEncrypted');
     utterances.at(-1).onerror();
@@ -599,11 +655,7 @@ test('hash calculator controls and completion statuses are announced', async () 
     assert.match(utterances.at(-1).text, /File check area/);
     assert.match(utterances.at(-1).text, /does not send them anywhere/);
 
-    click({
-      closest() {
-        return { id: 'sha256', name: 'hashAlgorithm', value: 'sha256', tagName: 'INPUT' };
-      }
-    });
+    controller.announceHashAlgorithm('sha256');
     assert.match(utterances.at(-1).text, /SHA two fifty-six is checked/);
     assert.match(utterances.at(-1).text, /does not hide the file or prove who made it/);
     assert.match(utterances.at(-1).text, /compare the full code shown here with a code from a source you trust/);
@@ -613,7 +665,25 @@ test('hash calculator controls and completion statuses are announced', async () 
       assert.equal(controller.announceStatus('hashSelected'), true, `${language} selection status`);
       assert.equal(controller.announceStatus('hashCalculated'), true, `${language} completion status`);
       assert.equal(controller.announceStatus('hashFailed'), true, `${language} failure status`);
+      assert.equal(controller.announceHashDigestCopy('sha256', true), true, `${language} digest copy`);
+      assert.equal(controller.announceHashDigestCopy('sha256', false), true, `${language} copy failure`);
+      assert.equal(controller.announceHashVerification('sha256', 2, 1, 1), true, `${language} verification`);
+      assert.equal(controller.announceInvalidExpectedHash('sha256', 64), true, `${language} invalid digest`);
+      assert.equal(controller.announceHashExported(), true, `${language} report export`);
     }
+    controller.setNarrationLanguage('en');
+    controller.announceHashDigestCopy('sha256', true);
+    assert.match(utterances.at(-1).text, /SHA two fifty-six digest copied/);
+    controller.announceHashDigestCopy('sha256', false);
+    assert.match(utterances.at(-1).text, /Could not copy the SHA two fifty-six digest/);
+    controller.announceHashVerification('sha256', 2, 1, 1);
+    assert.match(utterances.at(-1).text, /Expected SHA two fifty-six: 2 matches, 1 mismatch, 1 could not be checked/);
+    controller.announceInvalidExpectedHash('sha256', 64);
+    assert.match(utterances.at(-1).text, /exactly 64 hexadecimal characters/);
+    controller.announceHashExported();
+    assert.match(utterances.at(-1).text, /report has been prepared for download/);
+    assert.equal(controller.announceHashVerification('unknown', 0, 0, 0), false);
+    assert.equal(controller.announceHashVerification('sha256', -1, 0, 0), false);
     for (const [algorithm, expected] of [
       ['md5', /MD5 is checked/],
       ['sha1', /SHA one is checked/],

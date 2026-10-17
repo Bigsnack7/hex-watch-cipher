@@ -10,6 +10,10 @@ export {
 } from './crypto/rsa-hybrid.mjs';
 export { encryptRsaDirect, decryptRsaDirect } from './crypto/rsa-hybrid.mjs';
 export { encryptRsaThenAes, decryptRsaThenAes } from './crypto/rsa-hybrid.mjs';
+export {
+  SIGNED_MESSAGE_TAG, MAX_SIGNED_MESSAGE_CHARS, generateEcdsaKeyPair,
+  fingerprintEcdsaPublicKey, signMessageToken, verifyMessageToken, isSignedMessageToken
+} from './crypto/ecdsa-signature.mjs';
 export { encryptGrumpyV2, decryptGrumpyV2 } from './crypto/legacy.mjs';
 export {
   FILE_TAG, FILE_MAGIC, LEGACY_MAX_FILE_BYTES, LEGACY_MAX_FILE_TOKEN_CHARS,

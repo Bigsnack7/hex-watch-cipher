@@ -3,7 +3,9 @@ export const DECRYPT_FAILURE_MESSAGE =
 
 const SAFE_ERROR_CODES = new Set([
   'auth', 'decrypt', 'format', 'keyformat', 'keylarge', 'keytoolarge', 'rsasizelimit',
-  'keyweak', 'nocrypto', 'publickey', 'short', 'toolarge', 'filetoolarge'
+  'keyweak', 'nocrypto', 'publickey', 'short', 'toolarge', 'filetoolarge',
+  'signformat', 'signunsupported', 'signingprivate', 'signingpublic',
+  'signingkeyformat', 'signingkeymismatch'
 ]);
 
 export function getUserErrorMessage(error, decrypting, messages) {
@@ -19,7 +21,10 @@ export function getUserErrorMessage(error, decrypting, messages) {
     return messages[error.message];
   }
   if (error.message === 'short' || error.message === 'publickey' || error.message === 'keyformat' ||
-      error.message === 'keyweak' || error.message === 'keylarge' || error.message === 'rsasizelimit') {
+      error.message === 'keyweak' || error.message === 'keylarge' || error.message === 'rsasizelimit' ||
+      error.message === 'signformat' || error.message === 'signunsupported' ||
+      error.message === 'signingprivate' || error.message === 'signingpublic' ||
+      error.message === 'signingkeyformat' || error.message === 'signingkeymismatch') {
     return messages[error.message];
   }
   if (error.name === 'OperationError') return messages.auth;

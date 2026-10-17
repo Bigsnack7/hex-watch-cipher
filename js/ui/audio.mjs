@@ -1,3 +1,5 @@
+import { countPassphraseCharacters, estimatePassphraseStrength } from '../passphrase.mjs';
+
 export const NARRATION_GUIDES = Object.freeze({
   aes: Object.freeze([
     'AES-256-GCM is the recommended choice for a new message protected by an access key. It scrambles the message and checks for changes. If the key is wrong or someone changes the encrypted message, the app will not open it.',
@@ -31,6 +33,15 @@ export const NARRATION_GUIDES = Object.freeze({
   ])
 });
 
+const NARRATION_METHOD_NAMES = Object.freeze({
+  aes: 'AES-GCM, passphrase-based',
+  cbc: 'AES-CBC with HMAC, compatibility mode',
+  hybrid: 'AES-GCM with RSA-OAEP, hybrid',
+  'rsa-direct': 'RSA-OAEP, direct encryption',
+  'rsa-aes': 'RSA-OAEP with AES-GCM, dual-key',
+  legacy: 'Grumpy v2, legacy cipher'
+});
+
 export const NARRATION_LANGUAGES = Object.freeze({
   en: Object.freeze({ label: 'English', speechTag: 'en-GB' }),
   yo: Object.freeze({ label: 'Yoruba', speechTag: 'yo-NG' }),
@@ -39,6 +50,278 @@ export const NARRATION_LANGUAGES = Object.freeze({
   pcm: Object.freeze({ label: 'Nigerian Pidgin', speechTag: 'en-NG' }),
   es: Object.freeze({ label: 'Español', speechTag: 'es-ES' }),
   fr: Object.freeze({ label: 'Français', speechTag: 'fr-FR' })
+});
+
+const PASSPHRASE_STRENGTH_NARRATION = Object.freeze({
+  en: {
+    generated: 'Secure passphrase generated.',
+    estimate: 'Access-key estimate',
+    weak: 'weak',
+    fair: 'fair',
+    good: 'good',
+    strong: 'strong',
+    characters: 'characters',
+    add: 'Add',
+    remove: 'Remove',
+    meetLength: 'to meet the selected length.',
+    lengthMet: 'The selected length is met.',
+    unique: 'The selected length is met. Use a unique passphrase; this estimate cannot detect reuse or personal information.',
+    disclaimer: 'This is a rough estimate, not a password audit.'
+  },
+  yo: {
+    generated: 'A ti dá ọ̀rọ̀ aṣínà ààbò tuntun.',
+    estimate: 'Ìṣírò agbára kọ́kọ́rọ́',
+    weak: 'kò lágbára',
+    fair: 'dédé',
+    good: 'dára',
+    strong: 'lágbára',
+    characters: 'ẹ̀yà ọ̀rọ̀',
+    add: 'Fi',
+    remove: 'Yọ',
+    meetLength: 'kún láti bá gígùn tí a yàn mu.',
+    lengthMet: 'Gígùn tí a yàn bá mu.',
+    unique: 'Gígùn tí a yàn bá mu. Lo ọ̀rọ̀ aṣínà aláìlẹ́gbẹ́; ìṣírò yìí kò lè mọ̀ bóyá a tún lò ó tàbí bóyá ó ní ìsọfúnni ara ẹni.',
+    disclaimer: 'Ìṣírò yìí jẹ́ ìfojúsùn lasán, kì í ṣe àyẹ̀wò ọ̀rọ̀ aṣínà.'
+  },
+  ig: {
+    generated: 'Emeela paswọọdụ nchekwa ọhụrụ.',
+    estimate: 'Ntụle ike igodo',
+    weak: 'adịghị ike',
+    fair: 'nkezi',
+    good: 'dị mma',
+    strong: 'siri ike',
+    characters: 'akara',
+    add: 'Tinye',
+    remove: 'Wepụ',
+    meetLength: 'ka i kwekọọ n’ogologo a họọrọ.',
+    lengthMet: 'Ogologo a họọrọ zuru oke.',
+    unique: 'Ogologo a họọrọ zuru oke. Jiri paswọọdụ pụrụ iche; ntụle a agaghị amata ma ejirila ya ọzọ ma ọ bụ ma o nwere ozi nkeonwe.',
+    disclaimer: 'Nke a bụ naanị atụmatụ, ọ bụghị nyocha paswọọdụ.'
+  },
+  ha: {
+    generated: 'An ƙirƙiri sabon kalmar sirri mai tsaro.',
+    estimate: 'Ƙiyasin ƙarfin maɓalli',
+    weak: 'rauni',
+    fair: 'matsakaici',
+    good: 'mai kyau',
+    strong: 'mai ƙarfi',
+    characters: 'haruffa',
+    add: 'Ƙara',
+    remove: 'Cire',
+    meetLength: 'don cika tsawon da aka zaɓa.',
+    lengthMet: 'An cika tsawon da aka zaɓa.',
+    unique: 'An cika tsawon da aka zaɓa. Yi amfani da kalmar sirri ta musamman; wannan ƙiyasin ba zai iya gano sake amfani ko bayanan mutum ba.',
+    disclaimer: 'Wannan ƙiyasin ne kawai, ba cikakken binciken kalmar sirri ba.'
+  },
+  pcm: {
+    generated: 'Secure passphrase don generate.',
+    estimate: 'Access-key estimate',
+    weak: 'weak',
+    fair: 'fair',
+    good: 'good',
+    strong: 'strong',
+    characters: 'characters',
+    add: 'Add',
+    remove: 'Remove',
+    meetLength: 'to meet di selected length.',
+    lengthMet: 'Di selected length don correct.',
+    unique: 'Di selected length don correct. Use unique passphrase; dis estimate no fit know if you don use am before or if e get personal information.',
+    disclaimer: 'Na rough estimate, no be password audit.'
+  },
+  es: {
+    generated: 'Se generó una frase de acceso segura.',
+    estimate: 'Estimación de la clave',
+    weak: 'débil',
+    fair: 'regular',
+    good: 'buena',
+    strong: 'fuerte',
+    characters: 'caracteres',
+    add: 'Añade',
+    remove: 'Quita',
+    meetLength: 'para alcanzar la longitud seleccionada.',
+    lengthMet: 'La longitud seleccionada está completa.',
+    unique: 'La longitud seleccionada está completa. Usa una frase única; esta estimación no detecta reutilización ni datos personales.',
+    disclaimer: 'Es una estimación aproximada, no una auditoría de contraseñas.'
+  },
+  fr: {
+    generated: 'Une phrase secrète sécurisée a été générée.',
+    estimate: 'Estimation de la clé',
+    weak: 'faible',
+    fair: 'moyenne',
+    good: 'bonne',
+    strong: 'forte',
+    characters: 'caractères',
+    add: 'Ajoutez',
+    remove: 'Retirez',
+    meetLength: 'pour atteindre la longueur choisie.',
+    lengthMet: 'La longueur choisie est atteinte.',
+    unique: 'La longueur choisie est atteinte. Utilisez une phrase unique ; cette estimation ne détecte pas la réutilisation ni les informations personnelles.',
+    disclaimer: 'Il s’agit d’une estimation, pas d’un audit de mot de passe.'
+  }
+});
+
+const SIGNATURE_EVENT_NARRATION = Object.freeze({
+  en: Object.freeze({
+    signingEnabled: 'Signing is enabled. The message must use a supported encryption method and a matching ECDSA private and public key pair.',
+    signingDisabled: 'Signing is disabled. New messages will not include a sender signature.',
+    keyGenerated: 'ECDSA P-256 signing keys are ready. The private key is held in memory and will be lost when the page locks, closes, or reloads. Share only the public key, and compare its full fingerprint through a trusted channel.',
+    keyGeneratedExportable: 'ECDSA P-256 signing keys are ready. The private-key backup is visible. Store it securely and never share it. Share only the public key, and compare its fingerprint through a trusted channel.',
+    keyGenerationFailed: 'The ECDSA signing key could not be generated. Check browser support and try again.',
+    exportModeSelected: 'Exportable PEM is selected for the next generated signing key. Its private-key backup will be visible and must be stored securely.',
+    memoryModeSelected: 'Non-extractable memory-only storage is selected for the next generated signing key. The private key cannot be backed up and will be lost when the page closes or locks.',
+    signed: 'The encrypted message was signed. Share the signed token and public signing key separately. Recipients should compare the complete key fingerprint through a trusted channel.',
+    verified: 'The signature is valid. The token is still encrypted. Confirm the signer by comparing the complete public-key fingerprint through a trusted channel.',
+    decrypted: 'The signature was valid and the message has been decrypted. The signer identity is confirmed only if you trust the complete public-key fingerprint.',
+    decryptionFailed: 'The signature is valid, but the encrypted message could not be decrypted. Check the decryption key; the token remains encrypted.',
+    unsigned: 'The message is unsigned. Its sender identity has not been verified.',
+    failed: 'Signature verification failed. Do not treat this message as authenticated. Check the signature and the public signing key.',
+    keyMismatch: 'Signing stopped because the private signing key does not match the displayed public key. Restore the matching public key or import the corresponding private key.',
+    unsupported: 'Digital signatures are not available for Grumpy v2. Choose a supported modern encryption method.',
+    publicCopied: 'The public signing key was copied. Share only this key, and compare its fingerprint through a separate trusted channel.',
+    privateCopied: 'The private signing key backup was copied. Keep it secret; anyone with it can create signatures for this key.',
+    copyFailed: 'The signing key could not be copied. It is selected for manual copying; check carefully whether it is public or private before sharing.',
+    publicKeyReady: 'The ECDSA public-key fingerprint is ready. Compare the complete fingerprint with the claimed signer through a separate trusted channel.',
+    publicKeyInvalid: 'The ECDSA public key is not valid P-256 public-key PEM. Check the key before verifying a signature.',
+    summary: 'Digital signatures optionally sign encrypted message tokens with ECDSA P-256. Verification checks the token before decryption. A valid signature identifies a key, not its owner; verify the full fingerprint through a separate trusted channel.'
+  }),
+  yo: Object.freeze({
+    signingEnabled: 'Ìfọwọ́sí ti ṣiṣẹ́. Ọ̀nà ìpamọ́ tó bá a mu àti àwọn kọ́kọ́rọ́ ECDSA àdáni àti gbogbogbò tí wọ́n bá ara wọn mu ni a nílò.',
+    signingDisabled: 'Ìfọwọ́sí ti pa. Àwọn ìfiránṣẹ́ tuntun kò ní ní ìfọwọ́sí olùránṣẹ́.',
+    keyGenerated: 'Àwọn kọ́kọ́rọ́ ìfọwọ́sí ECDSA P-256 ti ṣetán. Kọ́kọ́rọ́ àdáni wà nínú ìrántí fún ìgbà díẹ̀, yóò sì sọnù nígbà tí ojú ìwé bá tiipa tàbí tún bẹ̀rẹ̀. Pín kọ́kọ́rọ́ gbogbogbò nìkan, kí o sì fi gbogbo àfọwọ́kọ ìkawe rẹ̀ wé ti olùránṣẹ́ ní ọ̀nà tí o gbẹ́kẹ̀lé.',
+    keyGeneratedExportable: 'Àwọn kọ́kọ́rọ́ ìfọwọ́sí ECDSA P-256 ti ṣetán. Ẹ̀dà ààbò kọ́kọ́rọ́ àdáni hàn; tọ́jú rẹ̀ dáadáa, má sì pín in. Pín kọ́kọ́rọ́ gbogbogbò nìkan.',
+    keyGenerationFailed: 'A kò lè dá kọ́kọ́rọ́ ìfọwọ́sí ECDSA. Ṣàyẹ̀wò ẹ̀rọ aṣàwákiri kí o sì tún gbìyànjú.',
+    exportModeSelected: 'A ti yan PEM tó ṣeé gbé jáde fún kọ́kọ́rọ́ ìfọwọ́sí tuntun. Ẹ̀dà ààbò àdáni yóò hàn; tọ́jú rẹ̀ dáadáa.',
+    memoryModeSelected: 'A ti yan ìtọ́jú inú ìrántí fún kọ́kọ́rọ́ ìfọwọ́sí tuntun. A kò lè ṣe ẹ̀dà ààbò, yóò sì sọnù tí ojú ìwé bá tiipa.',
+    signed: 'A ti fọwọ́sí ìfiránṣẹ́ ìpamọ́. Pín token àti kọ́kọ́rọ́ gbogbogbò lọ́tọ̀. Olùgbà gbọ́dọ̀ fi gbogbo àfọwọ́kọ ìkawe wé ti olùránṣẹ́ ní ọ̀nà tí ó gbẹ́kẹ̀lé.',
+    verified: 'Ìfọwọ́sí náà tọ́. Token náà ṣì wà ní ìpamọ́. Fi gbogbo àfọwọ́kọ ìkawe kọ́kọ́rọ́ gbogbogbò wé ti olùránṣẹ́ ní ọ̀nà tí ó gbẹ́kẹ̀lé.',
+    decrypted: 'Ìfọwọ́sí náà tọ́, a sì ti ṣí ìfiránṣẹ́ náà. Ìdánimọ̀ olùránṣẹ́ dá lórí bóyá o gbẹ́kẹ̀lé àfọwọ́kọ ìkawe rẹ̀.',
+    decryptionFailed: 'Ìfọwọ́sí náà tọ́, ṣùgbọ́n a kò lè ṣí ìfiránṣẹ́ náà. Ṣàyẹ̀wò kọ́kọ́rọ́ ṣíṣí; token náà ṣì wà ní ìpamọ́.',
+    unsigned: 'A kò fọwọ́sí ìfiránṣẹ́ náà. A kò tíì jẹ́rìí ìdánimọ̀ olùránṣẹ́.',
+    failed: 'Ìfọwọ́sí kò tọ́. Má ṣe gbà pé ìfiránṣẹ́ yìí jẹ́ òótọ́. Ṣàyẹ̀wò kọ́kọ́rọ́ gbogbogbò àti ìfọwọ́sí.',
+    keyMismatch: 'A dá ìfọwọ́sí dúró nítorí kọ́kọ́rọ́ àdáni kò bá kọ́kọ́rọ́ gbogbogbò tó wà lójú ìwé mu. Padà sí kọ́kọ́rọ́ tó tọ́.',
+    unsupported: 'A kò lè fọwọ́sí Grumpy v2. Yan ọ̀nà ìpamọ́ tuntun tó bá a mu.',
+    publicCopied: 'A ti da kọ́kọ́rọ́ gbogbogbò sí clipboard. Pín èyí nìkan, kí o sì fi àfọwọ́kọ ìkawe rẹ̀ wé ti olùránṣẹ́.',
+    privateCopied: 'A ti da ẹ̀dà ààbò kọ́kọ́rọ́ àdáni sí clipboard. Pa á mọ́; ẹni tó bá ní i lè dá ìfọwọ́sí sílẹ̀.',
+    copyFailed: 'A kò lè da kọ́kọ́rọ́ ìfọwọ́sí sí clipboard. Ṣàyẹ̀wò bóyá kọ́kọ́rọ́ náà jẹ́ àdáni tàbí gbogbogbò kí o tó pín in.',
+    publicKeyReady: 'Àfọwọ́kọ ìkawe kọ́kọ́rọ́ gbogbogbò ti ṣetán. Fi gbogbo rẹ̀ wé ti olùránṣẹ́ ní ọ̀nà tí o gbẹ́kẹ̀lé.',
+    publicKeyInvalid: 'Kọ́kọ́rọ́ gbogbogbò ECDSA P-256 kò tọ́. Ṣàyẹ̀wò rẹ̀ kí o tó fọwọ́sí ìfiránṣẹ́.',
+    summary: 'Ìfọwọ́sí àṣàyàn máa ń fọwọ́sí token ìfiránṣẹ́ ìpamọ́ pẹ̀lú ECDSA P-256. Ìfọwọ́sí dá kọ́kọ́rọ́ mọ̀, kì í ṣe ẹni tó ní i; fi gbogbo àfọwọ́kọ ìkawe wé ní ọ̀nà tí o gbẹ́kẹ̀lé.'
+  }),
+  ig: Object.freeze({
+    signingEnabled: 'Agbanyere mbinye aka. A ga-achọ usoro nzuzo akwadoro na igodo nzuzo na nke ọha ECDSA dabara adaba.',
+    signingDisabled: 'Agbanyụghị mbinye aka. Ozi ọhụrụ agaghị enwe mbinye aka onye zitere ya.',
+    keyGenerated: 'Igodo mbinye aka ECDSA P-256 adịla njikere. Igodo nzuzo dị naanị na ebe nchekwa ma ọ ga-apụ mgbe ibe mechiri ma ọ bụ malitegharịa. Kesaa naanị igodo ọha, ma jiri ụzọ ntụkwasị obi tụnyere akara mkpịsị aka ya niile.',
+    keyGeneratedExportable: 'Igodo mbinye aka ECDSA P-256 adịla njikere. Ndabere igodo nzuzo na-egosi; chekwaa ya nke ọma ma ekesakwala ya. Kesaa naanị igodo ọha.',
+    keyGenerationFailed: 'Enweghị ike imepụta igodo mbinye aka ECDSA. Lelee ihe nchọgharị ma nwaa ọzọ.',
+    exportModeSelected: 'A họrọla PEM a ga-ebupụ maka igodo mbinye aka ọhụrụ. Ndabere igodo nzuzo ga-egosi; chekwaa ya nke ọma.',
+    memoryModeSelected: 'A họrọla nchekwa ebe nchekwa naanị maka igodo mbinye aka ọhụrụ. Enweghị ike ịchekwa igodo nzuzo ma ọ ga-apụ mgbe ibe mechiri.',
+    signed: 'E tinyela mbinye aka na ozi ezoro ezo. Kesaa token na igodo mbinye aka ọha iche. Onye nata kwesịrị iji ụzọ ntụkwasị obi tụnyere akara mkpịsị aka igodo ahụ niile.',
+    verified: 'Mbinye aka ahụ ziri ezi. Token ahụ ka ezoro ezo. Jiri ụzọ ntụkwasị obi tụnyere akara mkpịsị aka igodo ọha ahụ niile.',
+    decrypted: 'Mbinye aka ahụ ziri ezi ma emeghela ozi ahụ. Ịmata onye zitere ya dabere n’inwe ntụkwasị obi n’akara mkpịsị aka igodo ahụ.',
+    decryptionFailed: 'Mbinye aka ahụ ziri ezi, mana enweghị ike imeghe ozi ahụ. Lelee igodo nzuzo; token ahụ ka zoro ezo.',
+    unsigned: 'Ozi ahụ enweghị mbinye aka. Ekwenyebeghị onye zitere ya.',
+    failed: 'Nyocha mbinye aka adaala. Ewerela ozi a dịka nke akwadoro. Lelee igodo ọha na mbinye aka.',
+    keyMismatch: 'Akwụsịla mbinye aka n’ihi na igodo nzuzo adabaghị na igodo ọha e gosiri. Weghachite igodo ha abụọ dabara.',
+    unsupported: 'A naghị akwado mbinye aka maka Grumpy v2. Họrọ usoro nzuzo ọhụrụ akwadoro.',
+    publicCopied: 'E depụtala igodo mbinye aka ọha. Kesaa naanị igodo a, ma jiri ụzọ ọzọ tụnyere akara mkpịsị aka ya.',
+    privateCopied: 'E depụtala ndabere igodo mbinye aka nzuzo. Debe ya na nzuzo; onye nwere ya nwere ike ịmepụta mbinye aka.',
+    copyFailed: 'Enweghị ike idetuo igodo mbinye aka. Lelee ma ọ bụ igodo ọha ma ọ bụ nke nzuzo tupu ikesa ya.',
+    publicKeyReady: 'Akara mkpịsị aka igodo ECDSA ọha adịla njikere. Jiri ụzọ ntụkwasị obi tụnyere ya.',
+    publicKeyInvalid: 'Igodo ọha ECDSA P-256 ezighi ezi. Lelee igodo tupu nyochaa mbinye aka.',
+    summary: 'Mbinye aka nhọrọ na-eji ECDSA P-256 bịanye aka na token ozi ezoro ezo. Mbinye aka ziri ezi na-egosi igodo, ọ bụghị onye nwe ya; jiri ụzọ ntụkwasị obi tụnyere akara mkpịsị aka ya niile.'
+  }),
+  ha: Object.freeze({
+    signingEnabled: 'An kunna sa hannu. Ana buƙatar hanyar ɓoyewa da aka yarda da ita da maɓallan ECDSA na sirri da na jama’a masu dacewa.',
+    signingDisabled: 'An kashe sa hannu. Sabbin saƙonni ba za su ƙunshi sa hannun mai aikawa ba.',
+    keyGenerated: 'Maɓallan sa hannun ECDSA P-256 sun shirya. Maɓallin sirri yana cikin ƙwaƙwalwar shafi ne kawai kuma zai ɓace idan shafin ya kulle ko ya rufe. Raba maɓallin jama’a kawai, kuma kwatanta cikakken sawun maɓallin ta hanyar amintacciya.',
+    keyGeneratedExportable: 'Maɓallan sa hannun ECDSA P-256 sun shirya. Ana nuna madadin maɓallin sirri; adana shi lafiya kuma kada a raba shi. Raba maɓallin jama’a kawai.',
+    keyGenerationFailed: 'Ba a iya ƙirƙirar maɓallin sa hannun ECDSA ba. Duba burauza sannan a sake gwadawa.',
+    exportModeSelected: 'An zaɓi PEM mai fitarwa don sabon maɓallin sa hannu. Madadin maɓallin sirri zai bayyana; ajiye shi lafiya.',
+    memoryModeSelected: 'An zaɓi ajiya a ƙwaƙwalwa kawai don sabon maɓallin sa hannu. Ba za a iya yin madadi ba kuma zai ɓace idan an rufe shafin.',
+    signed: 'An sanya wa saƙon ɓoye hannu. Raba token da maɓallin jama’a daban. Mai karɓa ya kwatanta cikakken sawun maɓallin ta hanya amintacciya.',
+    verified: 'Sa hannun ya inganta. Token ɗin yana nan a ɓoye. Kwatanta cikakken sawun maɓallin jama’a ta hanya amintacciya.',
+    decrypted: 'Sa hannun ya inganta kuma an buɗe saƙon. Tabbatar da mai aikawa ya danganta da amincewa da cikakken sawun maɓallin.',
+    decryptionFailed: 'Sa hannun ya inganta, amma ba a iya buɗe saƙon ba. Duba maɓallin buɗewa; token ɗin yana nan a ɓoye.',
+    unsigned: 'Saƙon ba shi da sa hannu. Ba a tabbatar da mai aikawa ba.',
+    failed: 'Tabbatar da sa hannu ya gaza. Kada a ɗauki saƙon a matsayin tabbatacce. Duba maɓallin jama’a da sa hannun.',
+    keyMismatch: 'An dakatar da sa hannu saboda maɓallin sirri bai dace da maɓallin jama’a da aka nuna ba. Mayar da maɓallan da suka dace.',
+    unsupported: 'Ba a iya sa wa Grumpy v2 hannu ba. Zaɓi hanyar ɓoyewa ta zamani da aka yarda da ita.',
+    publicCopied: 'An kwafi maɓallin sa hannu na jama’a. Raba wannan kawai, kuma kwatanta sawun sa ta wata hanya amintacciya.',
+    privateCopied: 'An kwafi madadin maɓallin sa hannu na sirri. Ajiye shi a ɓoye; mai samunsa zai iya ƙirƙirar sa hannu.',
+    copyFailed: 'Ba a iya kwafin maɓallin sa hannu ba. Tabbatar ko na sirri ne ko na jama’a kafin rabawa.',
+    publicKeyReady: 'Sawun maɓallin jama’a na ECDSA ya shirya. Kwatanta shi ta hanya amintacciya.',
+    publicKeyInvalid: 'Maɓallin jama’a na ECDSA P-256 ba daidai ba ne. Duba shi kafin tabbatar da sa hannu.',
+    summary: 'Sa hannun zaɓi yana amfani da ECDSA P-256 don sa wa token saƙon ɓoye hannu. Ingantaccen sa hannu yana tabbatar da maɓalli, ba mai shi ba; kwatanta cikakken sawun ta hanya amintacciya.'
+  }),
+  pcm: Object.freeze({
+    signingEnabled: 'Signing don on. E need supported encryption method and ECDSA private and public keys wey match.',
+    signingDisabled: 'Signing don off. New messages no go carry sender signature.',
+    keyGenerated: 'ECDSA P-256 signing keys don ready. Private key dey memory only and e go lost when page lock, close, or reload. Share public key only, and compare the full fingerprint through trusted channel.',
+    keyGeneratedExportable: 'ECDSA P-256 signing keys don ready. Private-key backup dey visible. Store am well and no share am. Share public key only.',
+    keyGenerationFailed: 'We no fit generate ECDSA signing key. Check browser support and try again.',
+    exportModeSelected: 'Exportable PEM don selected for next signing key. Private backup go show, so store am well.',
+    memoryModeSelected: 'Memory-only don selected for next signing key. You no fit back up di private key, and e go lost when page close or lock.',
+    signed: 'Encrypted message don get signature. Share signed token and public signing key separately. Receiver suppose compare the full key fingerprint through trusted channel.',
+    verified: 'Signature correct. Token still dey encrypted. Compare the full public-key fingerprint through trusted channel to confirm who send am.',
+    decrypted: 'Signature correct and message don decrypt. Sender identity depend on whether you trust the full public-key fingerprint.',
+    decryptionFailed: 'Signature correct, but we no fit decrypt the message. Check the decryption key; the token still dey encrypted.',
+    unsigned: 'Message no get signature. We never verify who send am.',
+    failed: 'Signature check fail. No trust say this message authentic. Check signature and public signing key.',
+    keyMismatch: 'Signing stop because private signing key no match the public key we show. Restore the correct matching key.',
+    unsupported: 'We no fit sign Grumpy v2. Choose supported modern encryption method.',
+    publicCopied: 'Public signing key don copy. Share this one only and compare the fingerprint through trusted channel.',
+    privateCopied: 'Private signing-key backup don copy. Keep am secret; anybody wey get am fit make signatures for this key.',
+    copyFailed: 'We no fit copy the signing key. Check whether na public or private before you share am.',
+    publicKeyReady: 'ECDSA public-key fingerprint don ready. Compare the full fingerprint through trusted channel.',
+    publicKeyInvalid: 'ECDSA P-256 public key no correct. Check am before you verify signature.',
+    summary: 'Optional digital signatures use ECDSA P-256 to sign encrypted message tokens. Correct signature show which key sign am, no be who own am. Compare the full fingerprint through trusted channel.'
+  }),
+  es: Object.freeze({
+    signingEnabled: 'La firma está activada. Se necesita un método de cifrado compatible y un par de claves ECDSA pública y privada coincidentes.',
+    signingDisabled: 'La firma está desactivada. Los mensajes nuevos no incluirán la firma del remitente.',
+    keyGenerated: 'Las claves ECDSA P-256 están listas. La clave privada solo permanece en memoria y se perderá al bloquear, cerrar o recargar la página. Comparte solo la clave pública y verifica toda su huella por un canal de confianza.',
+    keyGeneratedExportable: 'Las claves ECDSA P-256 están listas. La copia de la clave privada está visible. Guárdala de forma segura y no la compartas. Comparte solo la clave pública.',
+    keyGenerationFailed: 'No se pudo generar la clave ECDSA. Comprueba el navegador e inténtalo de nuevo.',
+    exportModeSelected: 'Se eligió PEM exportable para la próxima clave. La copia privada será visible y debe guardarse de forma segura.',
+    memoryModeSelected: 'Se eligió almacenamiento solo en memoria para la próxima clave. No se podrá respaldar y se perderá al cerrar o bloquear la página.',
+    signed: 'El mensaje cifrado se firmó. Comparte el token y la clave pública por separado. El destinatario debe comparar toda la huella por un canal de confianza.',
+    verified: 'La firma es válida. El token sigue cifrado. Compara toda la huella de la clave pública por un canal de confianza.',
+    decrypted: 'La firma era válida y el mensaje se descifró. La identidad del remitente solo se confirma si confías en toda la huella de la clave.',
+    decryptionFailed: 'La firma es válida, pero no se pudo descifrar el mensaje. Comprueba la clave de descifrado; el token sigue cifrado.',
+    unsigned: 'El mensaje no tiene firma. No se ha verificado la identidad del remitente.',
+    failed: 'La verificación de la firma falló. No consideres auténtico este mensaje. Comprueba la firma y la clave pública.',
+    keyMismatch: 'Se detuvo la firma porque la clave privada no coincide con la clave pública mostrada. Restaura el par correcto.',
+    unsupported: 'No se puede firmar Grumpy v2. Elige un método de cifrado moderno compatible.',
+    publicCopied: 'Se copió la clave pública de firma. Comparte solo esta clave y verifica su huella por un canal de confianza.',
+    privateCopied: 'Se copió la copia privada de firma. Guárdala en secreto; quien la tenga puede crear firmas con esta clave.',
+    copyFailed: 'No se pudo copiar la clave de firma. Comprueba si es pública o privada antes de compartirla.',
+    publicKeyReady: 'La huella de la clave pública ECDSA está lista. Compárala completa por un canal de confianza.',
+    publicKeyInvalid: 'La clave pública ECDSA P-256 no es válida. Revísala antes de verificar la firma.',
+    summary: 'Las firmas digitales opcionales usan ECDSA P-256 para firmar tokens cifrados. Una firma válida identifica una clave, no a su propietario; verifica la huella completa por un canal de confianza.'
+  }),
+  fr: Object.freeze({
+    signingEnabled: 'La signature est activée. Une méthode de chiffrement compatible et une paire de clés ECDSA publique et privée correspondantes sont nécessaires.',
+    signingDisabled: 'La signature est désactivée. Les nouveaux messages ne comporteront pas de signature d’expéditeur.',
+    keyGenerated: 'Les clés ECDSA P-256 sont prêtes. La clé privée reste en mémoire et sera perdue au verrouillage, à la fermeture ou au rechargement de la page. Partagez uniquement la clé publique et comparez son empreinte complète par un canal de confiance.',
+    keyGeneratedExportable: 'Les clés ECDSA P-256 sont prêtes. La sauvegarde privée est visible. Conservez-la en lieu sûr et ne la partagez pas. Partagez uniquement la clé publique.',
+    keyGenerationFailed: 'Impossible de générer la clé ECDSA. Vérifiez la prise en charge du navigateur et réessayez.',
+    exportModeSelected: 'Le PEM exportable est choisi pour la prochaine clé. La sauvegarde privée sera visible et devra être conservée en lieu sûr.',
+    memoryModeSelected: 'Le stockage en mémoire seule est choisi pour la prochaine clé. Elle ne pourra pas être sauvegardée et sera perdue à la fermeture ou au verrouillage.',
+    signed: 'Le message chiffré a été signé. Partagez séparément le jeton et la clé publique. Le destinataire doit comparer toute l’empreinte par un canal de confiance.',
+    verified: 'La signature est valide. Le jeton reste chiffré. Comparez toute l’empreinte de la clé publique par un canal de confiance.',
+    decrypted: 'La signature était valide et le message est déchiffré. L’identité de l’expéditeur n’est confirmée que si vous faites confiance à l’empreinte complète.',
+    decryptionFailed: 'La signature est valide, mais le message n’a pas pu être déchiffré. Vérifiez la clé ; le jeton reste chiffré.',
+    unsigned: 'Le message n’est pas signé. L’identité de l’expéditeur n’a pas été vérifiée.',
+    failed: 'La vérification de la signature a échoué. Ne considérez pas ce message comme authentifié. Vérifiez la signature et la clé publique.',
+    keyMismatch: 'La signature a été interrompue, car la clé privée ne correspond pas à la clé publique affichée. Rétablissez la paire correspondante.',
+    unsupported: 'Grumpy v2 ne peut pas être signé. Choisissez une méthode de chiffrement moderne compatible.',
+    publicCopied: 'La clé publique de signature a été copiée. Partagez uniquement cette clé et comparez son empreinte par un canal de confiance.',
+    privateCopied: 'La sauvegarde de la clé privée a été copiée. Gardez-la secrète ; toute personne qui la possède peut signer avec cette clé.',
+    copyFailed: 'Impossible de copier la clé de signature. Vérifiez si elle est publique ou privée avant de la partager.',
+    publicKeyReady: 'L’empreinte de la clé publique ECDSA est prête. Comparez-la entièrement par un canal de confiance.',
+    publicKeyInvalid: 'La clé publique ECDSA P-256 est invalide. Vérifiez-la avant de contrôler une signature.',
+    summary: 'Les signatures numériques facultatives utilisent ECDSA P-256 pour signer les jetons chiffrés. Une signature valide identifie une clé, pas son propriétaire ; comparez l’empreinte complète par un canal de confiance.'
+  })
 });
 
 const LANGUAGE_CHANGE_NARRATION = Object.freeze({
@@ -380,6 +663,12 @@ function getLocalizedGuide(mode, language) {
   ]);
 }
 
+function getSignatureEventMessage(event, language = 'en') {
+  const messages = SIGNATURE_EVENT_NARRATION[language]
+    || SIGNATURE_EVENT_NARRATION.en;
+  return messages[event] || null;
+}
+
 export function getNarrationGuide(mode, language = 'en', keyBits = 256, rsaKeyBits = 2048) {
   let guide;
   if (mode === 'rsa-aes') {
@@ -525,6 +814,79 @@ const HASH_ALGORITHM_GUIDES = Object.freeze({
   sha512: 'SHA five twelve is checked. It creates a longer code that you can use to check a file. Choose it when the maker or system asks for SHA five twelve. It does not hide the file or prove who made it. The longer code can also be harder to compare, and it is not always the right choice instead of SHA two fifty-six. To use it here, leave SHA five twelve checked, choose or drop your file, then compare the full code shown here with a code from a source you trust.'
 });
 
+const HASH_ALGORITHM_NAMES = Object.freeze({
+  md5: 'MD5',
+  sha1: 'SHA one',
+  sha256: 'SHA two fifty-six',
+  sha512: 'SHA five twelve'
+});
+
+const HASH_EVENT_NARRATION = Object.freeze({
+  en: Object.freeze({
+    copied: name => `${name} digest copied. Save it separately if you want to compare this file later.`,
+    copyFailed: name => `Could not copy the ${name} digest. It is selected so you can copy it manually.`,
+    verified: (name, matches, mismatches, unchecked) =>
+      `Expected ${name}: ${matches} match${matches === 1 ? '' : 'es'}, ${mismatches} mismatch${mismatches === 1 ? '' : 'es'}, ${unchecked} could not be checked.`,
+    invalidExpected: (name, length) =>
+      `The expected ${name} digest is invalid. Enter exactly ${length} hexadecimal characters.`,
+    exported: 'The file hash report has been prepared for download.'
+  }),
+  yo: Object.freeze({
+    copied: name => `A ti da ààmì ${name} kọ. Fi í pamọ́ lọ́tọ̀ bí o bá fẹ́ fi wé fáìlì náà lọ́jọ́ iwájú.`,
+    copyFailed: name => `Dídà ààmì ${name} kò ṣàṣeyọrí. A ti yan ààmì náà kí o lè dà á kọ lọ́wọ́.`,
+    verified: (name, matches, mismatches, unchecked) =>
+      `Àbájáde ${name}: ìbámu ${matches}, àìbámu ${mismatches}, fáìlì tí a kò lè ṣàyẹ̀wò ${unchecked}.`,
+    invalidExpected: (name, length) =>
+      `Ààmì ${name} tí a retí kò tọ́. Tẹ àwọn lẹ́tà hexadecimal gangan ${length}.`,
+    exported: 'A ti pèsè ìròyìn hash fáìlì fún gbígbà sílẹ̀.'
+  }),
+  ig: Object.freeze({
+    copied: name => `Edepụtala hash ${name}. Chekwaa ya iche ma ọ bụrụ na ịchọrọ iji ya tụnyere faịlụ a ọzọ.`,
+    copyFailed: name => `Edepụtaghị hash ${name}. Ahọpụtala ya ka i nwee ike idetuo ya n’aka.`,
+    verified: (name, matches, mismatches, unchecked) =>
+      `Nsonaazụ ${name}: faịlụ dakọtara ${matches}, ndị na-adabaghị ${mismatches}, ndị a na-enyochaghị ${unchecked}.`,
+    invalidExpected: (name, length) =>
+      `Hash ${name} ị tụrụ anya adịghị mma. Tinye mkpụrụedemede hexadecimal ${length} kpọmkwem.`,
+    exported: 'A kwadebela akụkọ hash faịlụ maka nbudata.'
+  }),
+  ha: Object.freeze({
+    copied: name => `An kwafi hash ${name}. Ajiye shi daban idan kana son sake kwatanta wannan fayil daga baya.`,
+    copyFailed: name => `An kasa kwafi hash ${name}. An zaɓe shi domin ka kwafe shi da hannu.`,
+    verified: (name, matches, mismatches, unchecked) =>
+      `Sakamakon ${name}: daidaito ${matches}, rashin daidaito ${mismatches}, waɗanda ba a iya dubawa ba ${unchecked}.`,
+    invalidExpected: (name, length) =>
+      `Hash ${name} da ake tsammani ba daidai ba ne. Shigar da haruffan hexadecimal ${length} daidai.`,
+    exported: 'An shirya rahoton hash na fayil don saukewa.'
+  }),
+  pcm: Object.freeze({
+    copied: name => `You don copy di ${name} hash. Keep am separate if you wan compare di file again later.`,
+    copyFailed: name => `Copy of di ${name} hash no work. Di hash don select so you fit copy am by hand.`,
+    verified: (name, matches, mismatches, unchecked) =>
+      `${name} check result: ${matches} match, ${mismatches} no match, ${unchecked} no fit check.`,
+    invalidExpected: (name, length) =>
+      `Di expected ${name} hash no correct. Enter exactly ${length} hexadecimal characters.`,
+    exported: 'Di file hash report don ready to download.'
+  }),
+  es: Object.freeze({
+    copied: name => `Se copió el resumen ${name}. Guárdalo por separado si quieres comparar este archivo más adelante.`,
+    copyFailed: name => `No se pudo copiar el resumen ${name}. Está seleccionado para que puedas copiarlo manualmente.`,
+    verified: (name, matches, mismatches, unchecked) =>
+      `Resultado ${name}: ${matches} coincidencias, ${mismatches} diferencias, ${unchecked} sin verificar.`,
+    invalidExpected: (name, length) =>
+      `El resumen ${name} esperado no es válido. Introduce exactamente ${length} caracteres hexadecimales.`,
+    exported: 'El informe de hashes de archivos está preparado para descargarse.'
+  }),
+  fr: Object.freeze({
+    copied: name => `L’empreinte ${name} a été copiée. Enregistrez-la séparément pour comparer ce fichier plus tard.`,
+    copyFailed: name => `Impossible de copier l’empreinte ${name}. Elle est sélectionnée pour une copie manuelle.`,
+    verified: (name, matches, mismatches, unchecked) =>
+      `Résultat ${name} : ${matches} correspondance(s), ${mismatches} différence(s), ${unchecked} fichier(s) non vérifié(s).`,
+    invalidExpected: (name, length) =>
+      `L’empreinte ${name} attendue est invalide. Saisissez exactement ${length} caractères hexadécimaux.`,
+    exported: 'Le rapport des empreintes de fichiers est prêt à être téléchargé.'
+  })
+});
+
 export function createAudioController({ isLocked }) {
   const $ = id => document.getElementById(id);
   const light = $('light');
@@ -645,10 +1007,41 @@ export function createAudioController({ isLocked }) {
     }
   }
 
+  function getPassphraseStrengthResult({ generated = false, includeLength = true } = {}) {
+    const value = $('key').value;
+    const target = Number($('passphraseLength').value);
+    const strings = PASSPHRASE_STRENGTH_NARRATION[narrationLanguage]
+      || PASSPHRASE_STRENGTH_NARRATION.en;
+    const estimate = estimatePassphraseStrength(value, target);
+    if (!estimate) return null;
+
+    const actual = countPassphraseCharacters(value);
+    let lengthGuidance = strings.unique;
+    if (actual < target) {
+      const difference = target - actual;
+      lengthGuidance = `${strings.add} ${difference} ${strings.characters} ${strings.meetLength}`;
+    } else if (actual > target) {
+      const difference = actual - target;
+      lengthGuidance = `${strings.remove} ${difference} ${strings.characters} ${strings.meetLength}`;
+    } else if (narrationLanguage === 'en' && estimate.guidance.startsWith('For a higher estimate')) {
+      lengthGuidance = strings.lengthMet;
+    }
+    const grade = strings[estimate.level];
+    const detail = narrationLanguage === 'en' &&
+      actual === target &&
+      estimate.guidance.startsWith('For a higher estimate')
+      ? `${estimate.guidance} `
+      : '';
+    const lengthSummary = includeLength
+      ? `${actual} of ${target} ${strings.characters}. ${lengthGuidance} `
+      : '';
+    return `${generated ? `${strings.generated} ` : ''}${strings.estimate}: ${grade}, ${estimate.score} out of 100. ${lengthSummary}${detail}${strings.disclaimer}`;
+  }
+
   function getContextualGuide(target) {
     if (!target || typeof target.closest !== 'function') return null;
     const element = target.closest(
-      'input,textarea,select,button,label,.field-hint,.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
+      'input,textarea,select,button,label,summary,.field-hint,.key-strength-status,.key-strength-guidance,[role="progressbar"],.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
     );
     if (!element) return null;
     const hashAlgorithmInput = element.name === 'hashAlgorithm' ? element : element.querySelector?.('input[name="hashAlgorithm"]');
@@ -658,10 +1051,29 @@ export function createAudioController({ isLocked }) {
         'Hash algorithm selector. Choose the digest you want to calculate with the selected file.';
     }
     const id = element.tagName === 'LABEL' ? element.htmlFor : element.id;
+    if (id === 'signatureToolsSummary') {
+      return SIGNATURE_EVENT_NARRATION[narrationLanguage]?.summary
+        || SIGNATURE_EVENT_NARRATION.en.summary;
+    }
+    if (id === 'signatureStatus') {
+      const status = $('signatureStatus').textContent;
+      if (/signing stopped/i.test(status)) return SIGNATURE_EVENT_NARRATION[narrationLanguage]?.keyMismatch;
+      if (/could not be decrypted/i.test(status)) return getSignatureEventMessage('decryptionFailed', narrationLanguage);
+      if (/message decrypted/i.test(status)) return SIGNATURE_EVENT_NARRATION[narrationLanguage]?.decrypted;
+      if (/verification failed/i.test(status)) return SIGNATURE_EVENT_NARRATION[narrationLanguage]?.failed;
+      if (/signature verified|signature is valid/i.test(status)) return SIGNATURE_EVENT_NARRATION[narrationLanguage]?.verified;
+      if (/unsigned message/i.test(status)) return SIGNATURE_EVENT_NARRATION[narrationLanguage]?.unsigned;
+      if (/message signed/i.test(status)) return SIGNATURE_EVENT_NARRATION[narrationLanguage]?.signed;
+      return status || getControlNarration(id, narrationLanguage);
+    }
+    if (id === 'keyStrengthMeter' || id === 'keyStrengthStatus' || id === 'keyStrengthGuidance') {
+      return getPassphraseStrengthResult() || getControlNarration(id, narrationLanguage);
+    }
     const controlNarration = getControlNarration(id, narrationLanguage);
     if (controlNarration) return controlNarration;
+    const methodName = NARRATION_METHOD_NAMES[narrationMode];
     if (narrationLanguage !== 'en') {
-      if (id === 'mode' || id === 'modeHint') return narrationGuide[0];
+      if (id === 'mode' || id === 'modeHint') return `${methodName}. ${narrationGuide[0]}`;
       if (id === 'aesKeySize' || id === 'aesKeySizeHint') return getKeySizeNarration(narrationLanguage, narrationKeyBits);
       if (id === 'rsaKeySize' || id === 'rsaKeySizeHint') {
         return getRsaKeySizeNarration(narrationLanguage, narrationRsaKeyBits);
@@ -705,8 +1117,8 @@ export function createAudioController({ isLocked }) {
         ? 'Enter the old key only to open an old message. This method is unsafe and cannot reliably show if someone changed the message.'
         : 'Use a long access key that you do not use anywhere else. Share it separately from the protected message, because anyone with both can read the message.';
     const guides = {
-      mode: `Message protection method. ${method[0]} ${why}`,
-      modeHint: `${method[0]} ${why}`,
+      mode: `${methodName}. Message protection method. ${method[0]} ${why}`,
+      modeHint: `${methodName}. ${method[0]} ${why}`,
       aesKeySize: getKeySizeNarration(narrationLanguage, narrationKeyBits),
       rsaKeySize: getRsaKeySizeNarration(narrationLanguage, narrationRsaKeyBits),
       key: `Access key box. ${accessKey}`,
@@ -733,6 +1145,26 @@ export function createAudioController({ isLocked }) {
       hashInput: 'Choose files to check. The app makes a short code for each file using the methods you selected.',
       hashSelected: 'Chosen files. This shows which files are ready to check.',
       hashOutput: 'File check results. Each code helps compare a file with a copy you trust. Compare the whole code, not just the beginning.',
+      passphraseLength: 'Generated passphrase length. Choose between 16 and 64 characters. Longer randomly generated passphrases are harder to guess; 24 characters is the recommended default.',
+      generatePassphrase: 'Generate secure passphrase button. It uses browser cryptographic randomness to create a mixed-character access key and puts it in the access-key box. It is not saved for you, so store it securely before relying on it.',
+      keyStrengthMeter: 'Access-key quality meter. It gives a rough estimate based on length, character variety, repetition, and common sequences. It is not a password audit and cannot detect reused passphrases or personal information.',
+      keyStrengthStatus: 'Access-key quality estimate. The score is a rough guide, not a password audit. Suggestions can flag selected length, character variety, repeated runs, and predictable sequences. Character groups are not a password requirement; prefer a long, unique, securely generated passphrase.',
+      signatureToolsSummary: SIGNATURE_EVENT_NARRATION[narrationLanguage]?.summary
+        || SIGNATURE_EVENT_NARRATION.en.summary,
+      exportHashResults: 'Export hash results CSV button. It downloads calculated digests and match results for the selected files.',
+      hashProgress: 'Hashing progress and completion status for the selected files.',
+      expectedHashAlgorithm: 'Expected hash algorithm. Choose the same algorithm used by the digest you were given. The selected digest is calculated even if its algorithm checkbox is not selected.',
+      expectedHash: 'Expected digest. Paste the complete hexadecimal digest from a source you trust. The calculator compares it with the selected file and reports Match or Mismatch. A match does not prove the digest came from an authentic source.',
+      expectedHashHint: 'Expected digest guidance. The digest must have the exact length and hexadecimal format for its algorithm. Prefer SHA-256 or SHA-512; MD5 and SHA-1 are only for compatibility.',
+      signMessage: 'Sign encrypted output. When checked, the app wraps a supported encrypted message token in an ECDSA P-256 signature. A matching private and public key pair is required. Recipients still need to trust the signing-key fingerprint.',
+      signingKeyMode: 'Generated signing-key handling. This setting affects newly generated keys only. A non-extractable key stays in this page and is lost when it locks or closes. Choose exportable PEM only if you need a secure backup.',
+      ecdsaPublicKey: 'ECDSA public signing key. Compare its full SHA-256 fingerprint with the claimed sender through a separate trusted channel before trusting signatures.',
+      ecdsaPrivateKey: 'ECDSA private signing key. This key can create signatures. Keep it secret and back it up securely if it is exportable.',
+      generateEcdsa: 'Generate ECDSA P-256 signing-key button. Keep the private key secret. Share only the public key and compare its fingerprint through a separate trusted channel.',
+      copyEcdsaPublic: 'Copy public signing key button. Share only this public key and verify its fingerprint through a trusted channel.',
+      copyEcdsaPrivate: 'Copy private signing-key backup button. This key can create signatures in your name. Keep it secret and store it securely.',
+      verifySignature: 'Verify signature only button. It checks the signed encrypted token with the supplied ECDSA public key without decrypting the message. Trust the key fingerprint separately.',
+      signatureStatus: 'Signature status. A valid signature proves the matching private key signed the token, not the identity of the person holding that key.',
       md5: 'MD5 makes a short code for a file. It is useful for older systems or spotting duplicates, but it is not safe for checking that a file is genuine.',
       sha1: 'SHA one makes a code for a file. Some older systems still need it, but it is not safe for important file checks.',
       sha256: 'SHA two fifty-six makes a code for a file and is a good default for checking a download. Compare the whole code with one from a source you trust.',
@@ -749,7 +1181,13 @@ export function createAudioController({ isLocked }) {
     if (id === 'rsaKeyModeHint' || id === 'rsaKeySummary' || id === 'rsaBackupReminder') return guides.rsaKeyMode;
     if (id === 'fingerprintStatus') return guides.rsaFingerprint;
     if (id === 'fileHint') return guides.fileInput;
-    if (id === 'hashDropzone' || id === 'hashInput' || id === 'hashSelected' || id === 'hashOutput') return guides[id];
+    if (id === 'hashDropzone' || id === 'hashInput' || id === 'hashSelected' || id === 'hashOutput' ||
+        id === 'exportHashResults' || id === 'hashProgress' ||
+        id === 'passphraseLength' || id === 'generatePassphrase' || id === 'expectedHashAlgorithm' || id === 'expectedHash' ||
+        id === 'expectedHashHint' || id === 'signMessage' || id === 'signingKeyMode' ||
+        id === 'ecdsaPublicKey' || id === 'ecdsaPrivateKey' || id === 'generateEcdsa' ||
+        id === 'copyEcdsaPublic' || id === 'copyEcdsaPrivate' || id === 'verifySignature' ||
+        id === 'signatureStatus') return guides[id];
     if (id === 'fileStatus') return $('fileStatus').textContent || guides.fileInput;
     if (id === 'operationStatus') return $('operationStatus').textContent || guides.mode;
     if (id === 'migrationStatus') return $('migrationStatus').textContent || guides.migrateLegacy;
@@ -803,11 +1241,12 @@ export function createAudioController({ isLocked }) {
     const target = event.target;
     // Find a nearby interactive control first; prefer a selector that includes the hash dropzone
     const element = target?.closest?.(
-      'input,textarea,select,button,label,.field-hint,.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
+      'input,textarea,select,button,label,summary,#signatureStatus,.field-hint,.key-strength-status,.key-strength-guidance,meter,[role="progressbar"],.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
     );
     if (!element) return;
     // Ignore narration toggle and selects opening
     if (element.id === 'voxB' || element.tagName === 'SELECT') return;
+    if (element.id === 'generatePassphrase') return;
     // If this was a hash-algorithm click (a checkbox inside the algorithms area), ignore here so
     // the change handler can announce the algorithm change explicitly.
     const hashAlgorithmInput = element.name === 'hashAlgorithm'
@@ -838,12 +1277,78 @@ export function createAudioController({ isLocked }) {
   function announceHashAlgorithm(algorithm, selected = true) {
     const guide = HASH_ALGORITHM_GUIDES[algorithm];
     if (!guide) return false;
-    const label = { md5: 'MD5', sha1: 'SHA one', sha256: 'SHA two fifty-six', sha512: 'SHA five twelve' }[algorithm];
+    const label = HASH_ALGORITHM_NAMES[algorithm];
     const message = selected
       ? guide
       : `${label} is unchecked, so it will not be included in the file check.`;
     announceMessage(message);
     return true;
+  }
+
+  function announceHashDigestCopy(algorithm, copied) {
+    const name = HASH_ALGORITHM_NAMES[algorithm];
+    const messages = HASH_EVENT_NARRATION[narrationLanguage] || HASH_EVENT_NARRATION.en;
+    if (!name) return false;
+    announceMessage(messages[copied ? 'copied' : 'copyFailed'](name));
+    return true;
+  }
+
+  function announceHashVerification(algorithm, matches, mismatches, unchecked) {
+    const name = HASH_ALGORITHM_NAMES[algorithm];
+    const messages = HASH_EVENT_NARRATION[narrationLanguage] || HASH_EVENT_NARRATION.en;
+    if (!name || [matches, mismatches, unchecked].some(count => !Number.isInteger(count) || count < 0)) {
+      return false;
+    }
+    announceMessage(messages.verified(name, matches, mismatches, unchecked));
+    return true;
+  }
+
+  function announceInvalidExpectedHash(algorithm, length) {
+    const name = HASH_ALGORITHM_NAMES[algorithm];
+    const messages = HASH_EVENT_NARRATION[narrationLanguage] || HASH_EVENT_NARRATION.en;
+    if (!name || !Number.isInteger(length) || length < 1) return false;
+    announceMessage(messages.invalidExpected(name, length));
+    return true;
+  }
+
+  function announceHashExported() {
+    const messages = HASH_EVENT_NARRATION[narrationLanguage] || HASH_EVENT_NARRATION.en;
+    announceMessage(messages.exported);
+    return true;
+  }
+
+  function announcePassphraseLength(length) {
+    if (![16, 20, 24, 32, 40, 64].includes(length)) return false;
+    const guidance=getContextualGuide($('passphraseLength'))||
+      'Generated passphrase length. Choose between 16 and 64 characters. Longer random passphrases are harder to guess; 24 characters is the recommended default.';
+    const strengthResult = getPassphraseStrengthResult({ includeLength: false });
+    announceMessage(`${guidance} Selected length: ${length} characters.${strengthResult ? ` ${strengthResult}` : ''}`);
+    return true;
+  }
+
+  function announcePassphraseResult(options) {
+    const message = getPassphraseStrengthResult(options);
+    if (!message) return false;
+    announceMessage(message);
+    return true;
+  }
+
+  function announcePassphraseGenerationError() {
+    const messages = {
+      en: 'A secure passphrase could not be generated. Use a secure browser on HTTPS or localhost, then try again.',
+      yo: 'A kò lè dá ọ̀rọ̀ aṣínà ààbò. Lo ẹ̀rọ aṣàwákiri ààbò lórí HTTPS tàbí localhost, kí o sì tún gbìyànjú.',
+      ig: 'Enweghị ike ịmepụta paswọọdụ nchekwa. Jiri ihe nchọgharị nchekwa na HTTPS ma ọ bụ localhost, nwaa ọzọ.',
+      ha: 'Ba a iya ƙirƙirar kalmar sirri mai tsaro ba. Yi amfani da amintaccen burauza a HTTPS ko localhost, sannan a sake gwadawa.',
+      pcm: 'We no fit generate secure passphrase. Use secure browser for HTTPS or localhost, then try again.',
+      es: 'No se pudo generar una frase segura. Usa un navegador seguro con HTTPS o localhost e inténtalo de nuevo.',
+      fr: 'Impossible de générer une phrase sécurisée. Utilisez un navigateur sécurisé avec HTTPS ou localhost, puis réessayez.'
+    };
+    announceMessage(messages[narrationLanguage] || messages.en);
+    return true;
+  }
+
+  function announceExpectedHashAlgorithm() {
+    announceMessage(getContextualGuide($('expectedHashAlgorithm')));
   }
 
   function handleRsaKeySizeChange() {
@@ -921,6 +1426,10 @@ export function createAudioController({ isLocked }) {
     setNarrationKeySize(Number($('aesKeySize').value), true);
   });
   $('rsaKeySize').addEventListener('change', handleRsaKeySizeChange);
+  $('passphraseLength').addEventListener('change', () => {
+    announcePassphraseLength(Number($('passphraseLength').value));
+  });
+  $('expectedHashAlgorithm').addEventListener('change', announceExpectedHashAlgorithm);
   if (speech) window.speechSynthesis.onvoiceschanged = () => { voice = pickVoice(narrationLanguage); };
   document.addEventListener('click', announceContext);
   document.addEventListener('visibilitychange', () => {
@@ -939,6 +1448,19 @@ export function createAudioController({ isLocked }) {
     announceStatus,
     announceLanguageChanged,
     announceHashAlgorithm,
+    announceHashDigestCopy,
+    announceHashVerification,
+    announceInvalidExpectedHash,
+    announceHashExported,
+    announcePassphraseLength,
+    announcePassphraseResult,
+    announcePassphraseGenerationError,
+    announceSignatureEvent(event) {
+      const message = getSignatureEventMessage(event, narrationLanguage);
+      if (!message) return false;
+      announceMessage(message);
+      return true;
+    },
     reset() {
       narrationEnabled = false;
       stopNarration();

@@ -1,5 +1,7 @@
 import {
-  AES_TAG, LEGACY_AES_TAG, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG, MAX_MESSAGE_BYTES, MAX_TOKEN_CHARS,
+  AES_TAG, LEGACY_AES_TAG, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG, MAX_MESSAGE_BYTES,
+  MAX_SIGNED_MESSAGE_CHARS, generateEcdsaKeyPair, fingerprintEcdsaPublicKey,
+  signMessageToken, verifyMessageToken, isSignedMessageToken,
   encryptAesGcm, decryptAesGcm, encryptCbcHmac, decryptCbcHmac,
   encryptRsaHybrid, decryptRsaHybrid, encryptRsaDirect, decryptRsaDirect,
   encryptRsaThenAes, decryptRsaThenAes,
@@ -11,6 +13,9 @@ import {
 import { createAudioController } from './ui/audio.mjs';
 import { createWorkspaceLock } from './ui/workspace-lock.mjs';
 import { getUserErrorMessage, logCryptoFailure } from './errors.mjs';
+import { countPassphraseCharacters, estimatePassphraseStrength, generatePassphrase } from './passphrase.mjs';
+import { HASH_DIGEST_LENGTHS, digestMatches, normalizeExpectedDigest } from './hash-verification.mjs';
+import { serializeHashResultsCsv } from './hash-results.mjs';
 
 (function(){
 'use strict';
@@ -19,18 +24,26 @@ const inp=$('inp'),key=$('key'),out=$('out'),mode=$('mode'),status=$('status'),
   encB=$('encB'),decB=$('decB'),clrB=$('clrB'),copyB=$('copy'),
   rsaPublic=$('rsaPublic'),rsaPrivate=$('rsaPrivate'),card=$('card'),lockScreen=$('lockScreen'),
   fileInput=$('fileInput'),fileEncryptB=$('fileEncrypt'),fileDecryptB=$('fileDecrypt'),downloadTokenB=$('downloadToken'),
-  hashInput=$('hashInput'),hashDropzone=$('hashDropzone'),hashSelected=$('hashSelected'),hashOutput=$('hashOutput');
+  hashInput=$('hashInput'),hashDropzone=$('hashDropzone'),hashSelected=$('hashSelected'),hashOutput=$('hashOutput'),
+  expectedHash=$('expectedHash'),expectedHashAlgorithm=$('expectedHashAlgorithm'),
+  keyStrengthMeter=$('keyStrengthMeter'),
+  keyStrengthStatus=$('keyStrengthStatus'),keyLengthStatus=$('keyLengthStatus');
 const subtle=window.crypto&&crypto.subtle;
 let locked=false,operationGeneration=0,operationBusy=false,hashGeneration=0;
 let lastEncryptedToken=null;
 let legacyMigrationText=null;
-let fingerprintTimer=null,fingerprintGeneration=0;
+let latestHashResults=[];
+let fingerprintTimer=null,fingerprintGeneration=0,signingFingerprintTimer=null,signingFingerprintGeneration=0;
 let rsaPrivateCryptoKey=null;
 let rsaGeneratedAt=null,rsaPrivateKeyState='none';
+let ecdsaPrivateCryptoKey=null;
 const operationControls=[
   encB,decB,clrB,copyB,downloadTokenB,key,inp,mode,$('aesKeySize'),$('eye'),
+  $('passphraseLength'),$('generatePassphrase'),
   rsaPublic,rsaPrivate,$('rsaKeyMode'),$('rsaKeySize'),$('generateRsa'),
-  $('copyPublic'),$('copyPrivate'),$('migrateLegacy'),fileInput
+  $('copyPublic'),$('copyPrivate'),$('migrateLegacy'),fileInput,hashInput,$('exportHashResults'),
+  $('signMessage'),$('signingKeyMode'),$('ecdsaPublicKey'),$('ecdsaPrivateKey'),
+  $('generateEcdsa'),$('copyEcdsaPublic'),$('copyEcdsaPrivate'),$('verifySignature')
 ];
 /* ================= UI logic ================= */
 const EMPTY='Your result will appear here.';
@@ -42,8 +55,14 @@ const MSG={auth:'Authentication failed. Check the access key or verify that the 
   keyformat:'The RSA key is not valid PEM in the required format.',
   rsakeytoolarge:'RSA key text exceeds the 20,000-character processing limit.',
   keylarge:'RSA keys larger than 8192 bits are not supported.',
+  signformat:'Only supported encrypted message tokens can be signed.',
+  signingprivate:'Generate or import a private ECDSA signing key before signing.',
+  signingpublic:'Paste the trusted ECDSA public key before verifying this signature.',
+  signingkeyformat:'The ECDSA signing key is invalid. Use a P-256 SPKI public key or PKCS#8 private key in PEM format.',
+  signingkeymismatch:'The private signing key does not match the displayed public signing key. Restore the matching key pair before signing.',
+  signunsupported:'Legacy Grumpy v2 output cannot be signed as an encrypted message. Use a modern encryption method.',
   keytoolarge:'Access keys cannot exceed 4,096 UTF-8 bytes.',
-  toolarge:'Messages are limited to 100,000 UTF-8 bytes; encrypted tokens are limited to 140,000 characters.',
+  toolarge:'Messages are limited to 100,000 UTF-8 bytes; encrypted tokens are limited to 140,000 characters and signed tokens to 200,000.',
   filetoolarge:'Files are limited to 1 GiB. Legacy HWF1 encrypted files are limited to 1 MiB.',
   fileformat:'This file is not a supported HWF2 encrypted file.',
   keyweak:'RSA keys must be at least 2048 bits.',
@@ -53,13 +72,24 @@ const MSG={auth:'Authentication failed. Check the access key or verify that the 
 function show(t,err){out.textContent=t;out.classList.toggle('err',!!err)}
 function updateActionButtons(){
   const unavailable=locked||operationBusy;
-  operationControls.forEach(control=>{control.disabled=unavailable});
+  operationControls.forEach(control=>{
+    control.disabled=unavailable||(control.id==='signMessage'&&mode.value==='legacy');
+  });
+  $('exportHashResults').disabled=unavailable||!latestHashResults.length;
   fileEncryptB.disabled=fileDecryptB.disabled=locked||operationBusy||!fileInput.files.length;
   downloadTokenB.disabled=locked||operationBusy||!lastEncryptedToken;
+}
+function formatHashFileSize(bytes){
+  if(bytes<1024)return `${bytes} B`;
+  const units=['KB','MB','GB','TB'];
+  let size=bytes/1024,index=0;
+  while(size>=1024&&index<units.length-1){size/=1024;index++}
+  return `${size.toFixed(size<10?1:0)} ${units[index]}`;
 }
 const busy=(b,action='')=>{
   operationBusy=b;
   $('operationStatus').textContent=b?`${action}. Please wait.`:'';
+  updatePassphraseStrength();
   updateActionButtons();
 };
 function setMessageDownload(token){
@@ -69,6 +99,7 @@ function setMessageDownload(token){
 function invalidateMessageResult(){
   setMessageDownload(null);
   clearLegacyMigration();
+  $('signatureStatus').textContent='';
   show(EMPTY);
 }
 function clearLegacyMigration(){
@@ -210,8 +241,7 @@ function md5Bytes(buffer){
   }
   return digestBytes;
 }
-async function computeFileHash(file,algorithm){
-  const buffer=await file.arrayBuffer();
+async function computeFileHash(algorithm,buffer){
   switch(algorithm){
     case 'md5':
       return bytesToHex(md5Bytes(buffer));
@@ -232,37 +262,130 @@ function setHashMessage(text,isError=false){
   message.textContent=text;
   hashOutput.appendChild(message);
 }
+function updatePassphraseStrength(){
+  const target=Number($('passphraseLength').value);
+  const actual=countPassphraseCharacters(key.value);
+  const difference=target-actual;
+  const estimate=estimatePassphraseStrength(key.value,target);
+  $('keyCheck-length').querySelector('span:last-child').textContent=`Exactly ${target} characters`;
+  const checklist=estimate?.checks||{
+    length:false,lowercase:false,uppercase:false,numbers:false,symbols:false
+  };
+  const lengthStatus=!key.value
+    ?`Enter ${target} characters for new password-based encryption.`
+    :difference===0
+      ?`${actual}/${target} characters — selected length met.`
+      :difference>0
+        ?`${actual}/${target} characters — enter ${difference} more.`
+        :`${actual}/${target} characters — remove ${Math.abs(difference)}.`;
+  keyLengthStatus.textContent=lengthStatus;
+  for(const [check,passed] of Object.entries(checklist)){
+    const item=$(`keyCheck-${check}`);
+    item.classList.toggle('is-met',passed);
+    item.setAttribute('aria-label',`${item.dataset.label}: ${passed?'met':'not met'}`);
+  }
+  const score=estimate?.score||0;
+  keyStrengthMeter.setAttribute('aria-valuetext',estimate?`${estimate.level} estimate, ${score} out of 100`:'No estimate');
+  keyStrengthMeter.value=score;
+  keyStrengthMeter.dataset.level=estimate?.level||'empty';
+  keyStrengthStatus.className=`key-strength-status${estimate?` ${estimate.level}`:''}`;
+  keyStrengthStatus.textContent=estimate
+    ?`${estimate.level[0].toUpperCase()}${estimate.level.slice(1)} estimate · ${score}/100`
+    :'Add an access key to see an estimate.';
+  $('keyStrengthGuidance').textContent=estimate?.guidance
+    ||'Use a long, unique passphrase. You can type one or generate it securely.';
+}
+function accessKeyLengthError(value){
+  const target=Number($('passphraseLength').value);
+  return `New password-based encryption requires exactly ${target} characters. Your access key has ${countPassphraseCharacters(value)}.`;
+}
 function clearHashWorkspace(){
   hashGeneration++;
   hashInput.value='';
   hashSelected.textContent='No file chosen';
+  expectedHash.value='';
+  latestHashResults=[];
+  $('exportHashResults').disabled=true;
+  $('hashProgress').textContent='';
   hashOutput.replaceChildren();
+}
+function exportHashResults(){
+  if(!latestHashResults.length)return;
+  triggerDownload(new Blob([serializeHashResultsCsv(latestHashResults)],{
+    type:'text/csv;charset=utf-8'
+  }),'file-hash-results.csv');
+  audio.announceHashExported();
 }
 async function handleHashFileSelect(fileList,announce=true){
   const generation=++hashGeneration;
   const files=[...fileList || []];
+  latestHashResults=[];
+  $('exportHashResults').disabled=true;
   if(!files.length){
     hashSelected.textContent='No file chosen';
+    $('hashProgress').textContent='';
+    hashOutput.replaceChildren();
     setHashMessage('Choose a file to calculate its hash value.');
     if(announce)audio.announceStatus('hashFailed');
     return;
   }
-  const algorithms=[...document.querySelectorAll('input[name="hashAlgorithm"]:checked')].map(input=>input.value);
-  if(!algorithms.length){
+  const expectedValue=expectedHash.value.trim();
+  const expectedAlgorithm=expectedHashAlgorithm.value;
+  let normalizedExpected=null;
+  if(expectedValue){
+    try{
+      normalizedExpected=normalizeExpectedDigest(expectedValue,expectedAlgorithm);
+    }catch{
+      $('hashProgress').textContent='';
+      hashOutput.replaceChildren();
+      const expectedLength=HASH_DIGEST_LENGTHS[expectedAlgorithm];
+      setHashMessage(`Enter a valid ${expectedAlgorithm.toUpperCase()} digest containing exactly ${expectedLength} hexadecimal characters.`,true);
+      audio.announceInvalidExpectedHash(expectedAlgorithm,expectedLength);
+      return;
+    }
+  }
+  const algorithms=new Set([...document.querySelectorAll('input[name="hashAlgorithm"]:checked')].map(input=>input.value));
+  if(normalizedExpected)algorithms.add(expectedAlgorithm);
+  if(!algorithms.size){
     hashSelected.textContent=`${files.length} file${files.length > 1 ? 's' : ''} selected`;
     setHashMessage('Select at least one hash algorithm.', true);
+    $('hashProgress').textContent='';
     if(announce)audio.announceStatus('hashFailed');
     return;
   }
   hashSelected.textContent=files.length === 1 ? files[0].name : `${files.length} files selected`;
   hashOutput.innerHTML='';
+  latestHashResults=[];
+  $('exportHashResults').disabled=true;
+  $('hashProgress').textContent=`Preparing to calculate ${files.length} file${files.length===1?'':'s'}…`;
   if(announce)audio.announceStatus('hashSelected');
   let encounteredError=false;
-  for(const file of files){
+  for(const [fileIndex,file] of files.entries()){
+    $('hashProgress').textContent=`Calculating ${fileIndex+1} of ${files.length}: ${file.name}`;
+    let fileBuffer;
+    try{fileBuffer=await file.arrayBuffer()}
+    catch{
+      encounteredError=true;
+      if(generation!==hashGeneration)return;
+      const item=document.createElement('article');
+      item.className='hash-file-result';
+      const title=document.createElement('h3');
+      title.textContent=`${file.name} · ${formatHashFileSize(file.size)}`;
+      const message=document.createElement('p');
+      message.className='hash-message error';
+      message.textContent='Could not read this file. Try a smaller file or check browser memory.';
+      item.append(title,message);
+      hashOutput.appendChild(item);
+      latestHashResults.push({
+        filename:file.name,size:file.size,algorithm:'',digest:'',expectedMatch:null,status:'read error'
+      });
+      continue;
+    }
+    if(generation!==hashGeneration)return;
     const item=document.createElement('article');
     item.className='hash-file-result';
     const title=document.createElement('h3');
-    title.textContent=file.name;
+    title.textContent=`${file.name} · ${formatHashFileSize(file.size)}`;
     const list=document.createElement('ul');
     list.className='hash-value-list';
     for(const algorithm of algorithms){
@@ -272,26 +395,79 @@ async function handleHashFileSelect(fileList,announce=true){
       label.textContent=algorithm.toUpperCase();
       const value=document.createElement('code');
       value.textContent='Calculating…';
-      row.appendChild(label);
-      row.appendChild(value);
+      const digestActions=document.createElement('div');
+      digestActions.className='hash-digest-actions';
+      const copyButton=document.createElement('button');
+      copyButton.type='button';
+      copyButton.className='hash-copy-button';
+      copyButton.textContent='Copy';
+      copyButton.disabled=true;
+      const copyLabel=`Copy ${algorithm.toUpperCase()} digest for ${file.name}`;
+      copyButton.setAttribute('aria-label',copyLabel);
+      copyButton.addEventListener('click',async()=>{
+        const copied=await copyText(value.textContent,value);
+        copyButton.textContent=copied?'Copied':'Copy failed';
+        copyButton.setAttribute('aria-label',copied
+          ?`${algorithm.toUpperCase()} digest copied`
+          :`Copy failed. ${algorithm.toUpperCase()} digest is selected for manual copying`);
+        setTimeout(()=>{
+          if(!copyButton.isConnected)return;
+          copyButton.textContent='Copy';
+          copyButton.setAttribute('aria-label',copyLabel);
+        },1400);
+        audio.announceHashDigestCopy(algorithm,copied);
+      });
+      digestActions.append(value,copyButton);
+      row.append(label,digestActions);
       list.appendChild(row);
       try{
-        value.textContent=await computeFileHash(file,algorithm);
+        const digest=await computeFileHash(algorithm,fileBuffer);
+        value.textContent=digest;
+        copyButton.disabled=false;
+        const result={filename:file.name,size:file.size,algorithm,digest,expectedMatch:null,status:'calculated'};
+        if(normalizedExpected&&algorithm===expectedAlgorithm){
+          const matches=digestMatches(digest,normalizedExpected);
+          result.expectedMatch=matches;
+          const verdict=document.createElement('span');
+          verdict.className=`hash-verdict ${matches?'match':'mismatch'}`;
+          verdict.setAttribute('role','status');
+          verdict.textContent=`Expected ${expectedAlgorithm.toUpperCase()}: ${matches?'Match':'Mismatch'}`;
+          row.appendChild(verdict);
+        }
+        latestHashResults.push(result);
         if(generation!==hashGeneration)return;
       }catch(error){
         if(generation!==hashGeneration)return;
         encounteredError=true;
         value.textContent='Unavailable';
+        copyButton.disabled=true;
         row.style.color='var(--danger)';
+        latestHashResults.push({
+          filename:file.name,size:file.size,algorithm,digest:'',expectedMatch:null,status:'unavailable'
+        });
       }
     }
     item.appendChild(title);
     item.appendChild(list);
     hashOutput.appendChild(item);
+    fileBuffer=null;
   }
-  if(announce){
+  $('exportHashResults').disabled=!latestHashResults.length;
+  const successfulDigests=latestHashResults.filter(result=>result.status==='calculated').length;
+  const errorRows=latestHashResults.length-successfulDigests;
+  const expectedResults=latestHashResults.filter(result=>
+    result.algorithm===expectedAlgorithm&&result.expectedMatch!==null
+  );
+  if(normalizedExpected){
+    const matches=expectedResults.filter(result=>result.expectedMatch).length;
+    const mismatches=expectedResults.length-matches;
+    audio.announceHashVerification(expectedAlgorithm,matches,mismatches,files.length-expectedResults.length);
+  }else if(announce){
     audio.announceStatus(encounteredError?'hashFailed':'hashCalculated');
   }
+  $('hashProgress').textContent=encounteredError
+    ?`Finished with read or calculation errors. ${successfulDigests} digest${successfulDigests===1?'':'s'} available; ${errorRows} error row${errorRows===1?'':'s'} recorded.`
+    :`Calculated ${successfulDigests} digest${successfulDigests===1?'':'s'} for ${files.length} file${files.length===1?'':'s'}.`;
 }
 function refresh(){
   const selected=mode.value;
@@ -310,15 +486,21 @@ function refresh(){
   $('modeHint').textContent=descriptions[selected][0];
   $('rsaKeys').hidden=!hybridMode;
   $('aesKeySizeField').hidden=selected!=='aes';
+  if(selected==='legacy'&&$('signMessage').checked){
+    $('signMessage').checked=false;
+    $('signatureStatus').textContent='Digital signatures are unavailable for insecure Grumpy v2 output.';
+    audio.announceSignatureEvent('unsupported');
+  }
   $('keyHint').textContent=selected==='rsa-aes'
-    ?'RSA-first dual-key encryption requires this access-key passphrase as well as the matching RSA private key to decrypt. Use at least 10 characters; maximum 4,096 UTF-8 bytes. The message is limited by the recipient RSA key size.'
+    ?'RSA-first dual-key encryption uses this access key together with the recipient private key. New encryption requires exactly the selected access-key length; decryption does not. Maximum 4,096 UTF-8 bytes. The message is limited by the recipient RSA key size.'
     :hybridMode
-    ?'RSA text encryption does not use this access key. It remains available for AES-256-GCM file encryption and password-based text modes. Use a long, unique passphrase; at least 10 characters and maximum 4,096 UTF-8 bytes.'
+    ?'RSA text encryption does not use this access key. It remains available for AES-256-GCM file encryption, which requires exactly the selected length when encrypting. Maximum 4,096 UTF-8 bytes.'
     :selected==='legacy'
     ?'WARNING: Grumpy v2 is cryptographically insecure and provides no reliable confidentiality or tamper detection. Use it only for legacy compatibility/testing, never sensitive messages. Enter a non-empty legacy key; this mode does not use AES/CBC NFKC normalization.'
-    :'Choose a long, unique passphrase; a randomly generated one is preferable to a short or predictable password. AES/CBC normalize passphrases with Unicode NFKC before deriving keys. At least 10 characters; maximum 4,096 UTF-8 bytes.';
+    :'Choose a long, unique passphrase; a randomly generated one is preferable to a short or predictable password. New password-based encryption requires exactly the selected length; decryption does not. AES/CBC normalize passphrases with Unicode NFKC before deriving keys. Maximum 4,096 UTF-8 bytes.';
   status.className='info'+(selected==='legacy'||!subtle?' warn':'');
   status.textContent=!subtle?MSG.nocrypto:descriptions[selected][1];
+  $('signMessage').disabled=locked||operationBusy||selected==='legacy';
   audio.setNarrationMode(selected);
   audio.setNarrationKeySize(aesKeyBits);
   audio.setNarrationRsaKeySize(rsaKeyBits);
@@ -329,26 +511,49 @@ async function run(dec){
   const raw=inp.value;
   clearLegacyMigration();
   setMessageDownload(null);
+  $('signatureStatus').textContent='';
   if(!raw.trim())return show(EMPTY);
-  if(raw.length>MAX_TOKEN_CHARS){show(MSG.toolarge,true);audio.announceStatus('operationFailed');return}
-  const value=raw.trim();
-  const isToken=value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)||value.startsWith(RSA_TAG)||value.startsWith(RSA_DIRECT_TAG)||value.startsWith(RSA_AES_TAG);
+  if(raw.length>MAX_SIGNED_MESSAGE_CHARS){show(MSG.toolarge,true);audio.announceStatus('operationFailed');return}
+  let value=raw.trim();
+  const isToken=isSignedMessageToken(value)||value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)||value.startsWith(RSA_TAG)||value.startsWith(RSA_DIRECT_TAG)||value.startsWith(RSA_AES_TAG);
   if((!dec||!isToken)&&new TextEncoder().encode(raw).length>MAX_MESSAGE_BYTES){
     show(MSG.toolarge,true);audio.announceStatus('operationFailed');return
   }
-  if(dec){
-    if(value.startsWith(RSA_AES_TAG))mode.value='rsa-aes';
-    else if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG))mode.value='aes';
-    else if(value.startsWith(CBC_TAG))mode.value='cbc';
-    else if(value.startsWith(RSA_TAG))mode.value='hybrid';
-    else if(value.startsWith(RSA_DIRECT_TAG))mode.value='rsa-direct';
-    refresh();
+  if(dec&&isSignedMessageToken(value)&&!$('ecdsaPublicKey').value.trim()){
+    show(MSG.signingpublic,true);$('ecdsaPublicKey').focus();audio.announceStatus('operationFailed');return;
   }
-  const pw=key.value,selected=mode.value;
+  if(!dec&&$('signMessage').checked){
+    if(mode.value==='legacy'){show(MSG.signunsupported,true);audio.announceStatus('operationFailed');return}
+    if(!ecdsaPrivateCryptoKey&&!$('ecdsaPrivateKey').value.trim()){
+      show(MSG.signingprivate,true);$('ecdsaPrivateKey').focus();audio.announceStatus('operationFailed');return;
+    }
+    if(!$('ecdsaPublicKey').value.trim()){
+      show(MSG.signingpublic,true);$('ecdsaPublicKey').focus();audio.announceStatus('operationFailed');return;
+    }
+  }
+  const pw=key.value;
   busy(true,dec?'Decrypting message':'Encrypting message');
   const generation=operationGeneration;
+  const signedInput=isSignedMessageToken(value)&&dec;
+  let verifiedSignature=null;
   try{
     if(!subtle)throw new Error('nocrypto');
+    if(dec&&isSignedMessageToken(value)){
+      verifiedSignature=await verifyMessageToken(value,$('ecdsaPublicKey').value.trim());
+      value=verifiedSignature.token;
+      $('signatureStatus').textContent=`Signature verified. Signer key fingerprint: ${verifiedSignature.fingerprint}. Identity is confirmed only if you trust this fingerprint.`;
+    }else if(dec){
+      $('signatureStatus').textContent='Unsigned message. The sender’s identity has not been verified.';
+    }
+    if(dec){
+      if(value.startsWith(RSA_AES_TAG))mode.value='rsa-aes';
+      else if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG))mode.value='aes';
+      else if(value.startsWith(CBC_TAG))mode.value='cbc';
+      else if(value.startsWith(RSA_TAG))mode.value='hybrid';
+      else if(value.startsWith(RSA_DIRECT_TAG))mode.value='rsa-direct';
+      refresh();
+    }
+    const selected=mode.value;
     let r;
     if(dec){
       if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)){
@@ -381,32 +586,73 @@ async function run(dec){
     }else if(selected==='rsa-aes'){
       if(!rsaPublic.value.trim()){show(MSG.publickey,1);rsaPublic.focus();audio.announceStatus('operationFailed');return}
       if(!pw){show('Enter an access key for the AES-GCM layer.',1);key.focus();audio.announceStatus('operationFailed');return}
-      if(pw.length<10)throw new Error('short');
+      if(countPassphraseCharacters(pw)!==Number($('passphraseLength').value)){
+        show(accessKeyLengthError(pw),1);key.focus();audio.announceStatus('operationFailed');return
+      }
       r=await encryptRsaThenAes(raw,rsaPublic.value,pw);
     }else if(selected==='hybrid'){
       if(!rsaPublic.value.trim()){show(MSG.publickey,1);rsaPublic.focus();audio.announceStatus('operationFailed');return}
       r=await encryptRsaHybrid(raw,rsaPublic.value);
     }else{
       if(!pw){show('Enter your access key to continue.',1);key.focus();audio.announceStatus('operationFailed');return}
-      if(pw.length<10)throw new Error('short');
+      if(countPassphraseCharacters(pw)!==Number($('passphraseLength').value)){
+        show(accessKeyLengthError(pw),1);key.focus();audio.announceStatus('operationFailed');return
+      }
       r=selected==='cbc'
         ?await encryptCbcHmac(raw,pw)
         :await encryptAesGcm(raw,pw,Number($('aesKeySize').value));
     }
+    if(!dec&&$('signMessage').checked){
+      r=await signMessageToken(r,ecdsaPrivateCryptoKey||$('ecdsaPrivateKey').value.trim());
+      try{
+        verifiedSignature=await verifyMessageToken(r,$('ecdsaPublicKey').value.trim());
+      }catch(error){
+        if(error.message==='signature')throw new Error('signingkeymismatch');
+        throw error;
+      }
+    }
     if(locked||generation!==operationGeneration)return;
     if(!dec)setMessageDownload(r);
+    if(!dec&&$('signMessage').checked){
+      $('signatureStatus').textContent=`Encrypted message signed. Signing-key fingerprint: ${verifiedSignature.fingerprint}. Recipients must compare this fingerprint through a trusted channel.`;
+    }
     if(dec&&selected==='legacy'){
       legacyMigrationText=r;
       $('legacyMigration').hidden=false;
     }
+    if(dec&&verifiedSignature){
+      $('signatureStatus').textContent=`Signature verified and message decrypted. Signer key fingerprint: ${verifiedSignature.fingerprint}. Identity is confirmed only if you trust this fingerprint.`;
+    }
     show(r);
-    audio.announceStatus(dec?'messageDecrypted':'messageEncrypted');
+    if(dec&&verifiedSignature)audio.announceSignatureEvent('decrypted');
+    else if(dec)audio.announceSignatureEvent('unsigned');
+    else if($('signMessage').checked)audio.announceSignatureEvent('signed');
+    else audio.announceStatus(dec?'messageDecrypted':'messageEncrypted');
   }catch(e){
     if(locked||generation!==operationGeneration)return;
     setMessageDownload(null);
+    if(e.message==='signingpublic')$('signatureStatus').textContent='';
+    else if(e.message==='signingkeymismatch'){
+      $('signatureStatus').textContent='Signing stopped. The private signing key does not match the displayed public key; no signed result was produced.';
+    }
+    else if(signedInput&&e.message==='signingkeyformat'){
+      $('signatureStatus').textContent=MSG.signingkeyformat;
+    }
+    else if(signedInput){
+      $('signatureStatus').textContent=verifiedSignature
+        ?'Signature is valid, but the encrypted message could not be decrypted. Check the decryption key.'
+        :'Signature verification failed. Check the signer public key and confirm the message was not changed.';
+    }
     logCryptoFailure(e,dec);
-    show(getUserErrorMessage(e,dec,MSG),1);
-    audio.announceStatus('operationFailed');
+    show(signedInput&&e.message==='signingkeyformat'
+      ?MSG.signingkeyformat
+      :getUserErrorMessage(e,dec,MSG),1);
+    if(e.message==='signingkeymismatch')audio.announceSignatureEvent('keyMismatch');
+    else if(signedInput&&verifiedSignature)audio.announceSignatureEvent('decryptionFailed');
+    else if(signedInput&&!verifiedSignature){
+      audio.announceSignatureEvent(e.message==='signingkeyformat'?'publicKeyInvalid':'failed');
+    }
+    else audio.announceStatus('operationFailed');
   }finally{busy(false)}
 }
 async function runFile(decrypting){
@@ -424,7 +670,14 @@ async function runFile(decrypting){
   }
   const password=key.value;
   if(!password){fileStatus.textContent='Enter your access key to continue.';key.focus();audio.announceStatus('fileFailed');return}
-  if(password.length<10){fileStatus.textContent=MSG.short;key.focus();audio.announceStatus('fileFailed');return}
+  if(decrypting&&password.length<10){fileStatus.textContent=MSG.short;key.focus();audio.announceStatus('fileFailed');return}
+  if(!decrypting&&countPassphraseCharacters(password)!==Number($('passphraseLength').value)){
+    fileStatus.textContent=accessKeyLengthError(password);
+    fileStatus.classList.add('error');
+    key.focus();
+    audio.announceStatus('fileFailed');
+    return;
+  }
   fileStatus.textContent='';
   fileStatus.classList.remove('error');
   const suggestedName=decrypting?'decrypted-file.bin':'encrypted-file.hwf2';
@@ -583,6 +836,97 @@ async function updateRsaFingerprint(){
     message.setAttribute('aria-label','Could not calculate public-key fingerprint. Check that the public key is valid RSA SPKI PEM.');
   }
 }
+async function updateEcdsaFingerprint(){
+  const generation=++signingFingerprintGeneration;
+  const display=$('ecdsaFingerprint');
+  try{
+    const fingerprint=await fingerprintEcdsaPublicKey($('ecdsaPublicKey').value);
+    if(locked||generation!==signingFingerprintGeneration)return null;
+    display.textContent=fingerprint;
+    return fingerprint;
+  }catch{
+    if(locked||generation!==signingFingerprintGeneration)return null;
+    display.textContent=$('ecdsaPublicKey').value.trim()?'Invalid ECDSA P-256 public key':'Not calculated';
+    return null;
+  }
+}
+function scheduleEcdsaFingerprint(){
+  if(locked)return;
+  clearTimeout(signingFingerprintTimer);
+  signingFingerprintGeneration++;
+  if(!$('ecdsaPublicKey').value.trim()){
+    $('ecdsaFingerprint').textContent='Not calculated';
+    return;
+  }
+  signingFingerprintTimer=setTimeout(updateEcdsaFingerprint,250);
+}
+function updateSigningKeyModeHint(){
+  $('signingKeyModeHint').textContent=$('signingKeyMode').value==='exportable'
+    ?'The generated private key will be exportable PEM and visible below. Back it up securely; anyone with it can create messages that appear signed by this key.'
+    :'The private key stays non-extractable in page memory. It is cleared when the workspace locks or the page closes. Generate an exportable key if you need a backup.';
+}
+async function generateEcdsa(){
+  if(locked||operationBusy)return;
+  if((ecdsaPrivateCryptoKey||$('ecdsaPrivateKey').value.trim()||$('ecdsaPublicKey').value.trim())&&
+      !confirm('Replace the current ECDSA signing key? Any signed message will still require the old public key for verification. Continue?'))return;
+  invalidateMessageResult();
+  busy(true,'Generating ECDSA P-256 signing key pair');
+  const generation=operationGeneration;
+  try{
+    if(!subtle)throw new Error('nocrypto');
+    const exportable=$('signingKeyMode').value==='exportable';
+    const pair=await generateEcdsaKeyPair({exportable});
+    if(locked||generation!==operationGeneration)return;
+    ecdsaPrivateCryptoKey=pair.privateKey;
+    $('ecdsaPublicKey').value=pair.publicKey;
+    $('ecdsaPrivateKey').value=pair.privatePem||'';
+    $('copyEcdsaPrivate').hidden=!pair.privatePem;
+    $('ecdsaBackupReminder').hidden=!exportable;
+    await updateEcdsaFingerprint();
+    if(locked||generation!==operationGeneration)return;
+    show(exportable
+      ?'ECDSA P-256 signing key pair generated. Store the private-key backup securely.'
+      :'Non-extractable ECDSA signing key generated in memory. It will be lost on lock, page close, or reload.',false);
+    audio.announceSignatureEvent(exportable?'keyGeneratedExportable':'keyGenerated');
+  }catch(error){
+    if(locked||generation!==operationGeneration)return;
+    show(error.message==='nocrypto'?MSG.nocrypto:'Could not generate the ECDSA P-256 signing key. Check browser support and try again.',true);
+    audio.announceSignatureEvent('keyGenerationFailed');
+  }finally{busy(false)}
+}
+async function verifySignatureOnly(){
+  if(locked||operationBusy)return;
+  const token=inp.value.trim();
+  if(!isSignedMessageToken(token)){
+    $('signatureStatus').textContent='Paste a SIG1. signed encrypted message into the message field first.';
+    audio.announceStatus('operationFailed');
+    return;
+  }
+  if(!$('ecdsaPublicKey').value.trim()){
+    $('signatureStatus').textContent=MSG.signingpublic;
+    $('ecdsaPublicKey').focus();
+    audio.announceStatus('operationFailed');
+    return;
+  }
+  busy(true,'Verifying ECDSA P-256 signature');
+  const generation=operationGeneration;
+  try{
+    const result=await verifyMessageToken(token,$('ecdsaPublicKey').value.trim());
+    if(locked||generation!==operationGeneration)return;
+    $('signatureStatus').textContent=`Signature verified. Signer key fingerprint: ${result.fingerprint}. Identity is confirmed only if you trust this fingerprint.`;
+    show('Signature is valid. The payload remains encrypted and has not been decrypted.',false);
+    audio.announceSignatureEvent('verified');
+  }catch(error){
+    if(locked||generation!==operationGeneration)return;
+    logCryptoFailure(error,true);
+    const invalidKey=error.message==='signingkeyformat';
+    $('signatureStatus').textContent=invalidKey
+      ?MSG.signingkeyformat
+      :'Signature verification failed. Check the signer public key and confirm the message was not changed.';
+    show(invalidKey?MSG.signingkeyformat:'Signature verification failed.',true);
+    audio.announceSignatureEvent(invalidKey?'publicKeyInvalid':'failed');
+  }finally{busy(false)}
+}
 function scheduleRsaFingerprint(){
   if(locked)return;
   clearTimeout(fingerprintTimer);
@@ -595,12 +939,17 @@ function scheduleRsaFingerprint(){
   $('rsaFingerprint').textContent='Waiting for key input…';
   fingerprintTimer=setTimeout(()=>updateRsaFingerprint(),300);
 }
-async function copyKey(field,label){
+async function copyKey(field,label,signatureEvent=null){
   const value=field.value.trim();
-  if(!value){show(`No ${label} is available to copy.`,true);return}
+  if(!value){
+    show(`No ${label} is available to copy.`,true);
+    if(signatureEvent)audio.announceSignatureEvent('copyFailed');
+    return;
+  }
   const copied=await copyText(value,field);
   show(copied?`${label} copied to the clipboard.`:`Copy failed. The ${label} text is selected for manual copying.`,!copied);
-  audio.announceStatus(copied?'keyCopied':'copyFailed');
+  if(signatureEvent)audio.announceSignatureEvent(copied?signatureEvent:'copyFailed');
+  else audio.announceStatus(copied?'keyCopied':'copyFailed');
 }
 let copyFeedbackTimer=null;
 function flash(t){
@@ -653,13 +1002,22 @@ function clearSensitiveWorkspace(){
   fingerprintGeneration++;
   clearTimeout(fingerprintTimer);
   key.value='';
+  updatePassphraseStrength();
   key.type='password';
   rsaPrivate.value='';
   rsaPrivateCryptoKey=null;
+  ecdsaPrivateCryptoKey=null;
   rsaPrivateKeyState='cleared';
   updateRsaKeySummary();
   $('copyPrivate').hidden=true;
   $('rsaBackupReminder').hidden=true;
+  $('ecdsaPrivateKey').value='';
+  $('copyEcdsaPrivate').hidden=true;
+  $('ecdsaBackupReminder').hidden=true;
+  $('signMessage').checked=false;
+  $('signatureStatus').textContent='';
+  clearTimeout(signingFingerprintTimer);
+  signingFingerprintGeneration++;
   inp.value='';
   fileInput.value='';
   $('fileStatus').textContent='';
@@ -679,13 +1037,20 @@ function clearSensitiveWorkspace(){
 /* ================= Wiring ================= */
 encB.addEventListener('click',()=>run(false));
 decB.addEventListener('click',()=>run(true));
-clrB.addEventListener('click',()=>{inp.value='';fileInput.value='';$('fileStatus').textContent='';$('fileStatus').classList.remove('error');clearHashWorkspace();clearLegacyMigration();setMessageDownload(null);show(EMPTY);inp.focus();setTimeout(()=>audio.announceStatus('workspaceCleared'),0)});
+clrB.addEventListener('click',()=>{inp.value='';fileInput.value='';$('fileStatus').textContent='';$('fileStatus').classList.remove('error');clearHashWorkspace();clearLegacyMigration();setMessageDownload(null);$('signatureStatus').textContent='';show(EMPTY);inp.focus();setTimeout(()=>audio.announceStatus('workspaceCleared'),0)});
 copyB.addEventListener('click',copy);
 downloadTokenB.addEventListener('click',downloadMessageToken);
 fileEncryptB.addEventListener('click',()=>runFile(false));
 fileDecryptB.addEventListener('click',()=>runFile(true));
 fileInput.addEventListener('change',()=>{$('fileStatus').textContent='';$('fileStatus').classList.remove('error');updateActionButtons()});
 hashInput.addEventListener('change',event=>handleHashFileSelect(event.target.files));
+expectedHash.addEventListener('change',()=>{
+  if(hashInput.files && hashInput.files.length)handleHashFileSelect(hashInput.files,false);
+});
+expectedHashAlgorithm.addEventListener('change',()=>{
+  if(hashInput.files && hashInput.files.length)handleHashFileSelect(hashInput.files,false);
+});
+$('exportHashResults').addEventListener('click',exportHashResults);
 for(const hashField of document.querySelectorAll('input[name="hashAlgorithm"]')){
   hashField.addEventListener('change',()=>{
     audio.announceHashAlgorithm(hashField.value,hashField.checked);
@@ -723,8 +1088,50 @@ $('aesKeySize').addEventListener('change',()=>{invalidateMessageResult();refresh
 $('rsaKeySize').addEventListener('change',()=>{invalidateMessageResult();refresh()});
 $('generateRsa').addEventListener('click',generateRsa);
 $('rsaPublic').addEventListener('input',()=>{invalidateMessageResult();scheduleRsaFingerprint()});
-$('key').addEventListener('input',invalidateMessageResult);
+$('key').addEventListener('input',()=>{invalidateMessageResult();updatePassphraseStrength()});
+$('key').addEventListener('blur',()=>audio.announcePassphraseResult());
+$('passphraseLength').addEventListener('change',updatePassphraseStrength);
+$('generatePassphrase').addEventListener('click',()=>{
+  try{
+    key.value=generatePassphrase(Number($('passphraseLength').value));
+    invalidateMessageResult();
+    updatePassphraseStrength();
+    audio.announcePassphraseResult({generated:true});
+    key.focus();
+  }catch(error){
+    keyStrengthStatus.className='key-strength-status error';
+    keyStrengthStatus.textContent=error.message==='nocrypto'
+      ?'Secure passphrase generation is unavailable. Open this page over HTTPS or localhost.'
+      :'Could not generate a secure passphrase. Try again.';
+    audio.announcePassphraseGenerationError();
+  }
+});
 $('rsaKeyMode').addEventListener('change',updateRsaKeyModeHint);
+$('signingKeyMode').addEventListener('change',()=>{
+  updateSigningKeyModeHint();
+  audio.announceSignatureEvent($('signingKeyMode').value==='exportable'
+    ?'exportModeSelected':'memoryModeSelected');
+});
+$('generateEcdsa').addEventListener('click',generateEcdsa);
+$('verifySignature').addEventListener('click',verifySignatureOnly);
+$('ecdsaPublicKey').addEventListener('input',()=>{invalidateMessageResult();scheduleEcdsaFingerprint()});
+$('ecdsaPublicKey').addEventListener('blur',async()=>{
+  if(!$('ecdsaPublicKey').value.trim())return;
+  audio.announceSignatureEvent(await updateEcdsaFingerprint()
+    ?'publicKeyReady':'publicKeyInvalid');
+});
+$('ecdsaPrivateKey').addEventListener('input',()=>{
+  invalidateMessageResult();
+  ecdsaPrivateCryptoKey=null;
+  $('ecdsaBackupReminder').hidden=true;
+  $('copyEcdsaPrivate').hidden=!$('ecdsaPrivateKey').value.trim();
+});
+$('signMessage').addEventListener('change',()=>{
+  invalidateMessageResult();
+  audio.announceSignatureEvent($('signMessage').checked?'signingEnabled':'signingDisabled');
+});
+$('copyEcdsaPublic').addEventListener('click',()=>copyKey($('ecdsaPublicKey'),'public signing key','publicCopied'));
+$('copyEcdsaPrivate').addEventListener('click',()=>copyKey($('ecdsaPrivateKey'),'private signing key','privateCopied'));
 $('rsaPrivate').addEventListener('input',()=>{
   invalidateMessageResult();
   rsaPrivateCryptoKey=null;
