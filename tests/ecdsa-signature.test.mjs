@@ -5,6 +5,7 @@ import {
   signMessageToken, verifyMessageToken, isSignedMessageToken
 } from '../js/crypto.mjs';
 import { writePem } from '../js/crypto/pem.mjs';
+import { getUserErrorMessage } from '../js/errors.mjs';
 
 test('ECDSA P-256 signatures verify the exact encrypted token and fingerprint', async () => {
   const pair = await generateEcdsaKeyPair();
@@ -21,7 +22,13 @@ test('ECDSA signed-message verification rejects altered payloads and untrusted k
   const signer = await generateEcdsaKeyPair();
   const stranger = await generateEcdsaKeyPair();
   const signed = await signMessageToken(`${AES_TAG}original`, signer.privateKey);
-  await assert.rejects(verifyMessageToken(signed, stranger.publicKey), error => error.message === 'signature');
+  await assert.rejects(
+    verifyMessageToken(signed, stranger.publicKey),
+    error => error.message === 'signature' &&
+      getUserErrorMessage(error, true, {
+        signature: 'Signature verification failed. Check the signer public key and confirm the message was not changed.'
+      }) === 'Signature verification failed. Check the signer public key and confirm the message was not changed.'
+  );
 
   const alteredBytes = Buffer.from(signed.slice(SIGNED_MESSAGE_TAG.length), 'base64url');
   alteredBytes[9] = alteredBytes[9] === 0x41 ? 0x42 : 0x41;

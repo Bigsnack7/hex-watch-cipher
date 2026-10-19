@@ -665,6 +665,7 @@ test('hash calculator controls and completion statuses are announced', async () 
       assert.equal(controller.announceStatus('hashSelected'), true, `${language} selection status`);
       assert.equal(controller.announceStatus('hashCalculated'), true, `${language} completion status`);
       assert.equal(controller.announceStatus('hashFailed'), true, `${language} failure status`);
+      assert.equal(controller.announceStatus('fileOutputFailed'), true, `${language} file output error`);
       assert.equal(controller.announceHashDigestCopy('sha256', true), true, `${language} digest copy`);
       assert.equal(controller.announceHashDigestCopy('sha256', false), true, `${language} copy failure`);
       assert.equal(controller.announceHashVerification('sha256', 2, 1, 1), true, `${language} verification`);

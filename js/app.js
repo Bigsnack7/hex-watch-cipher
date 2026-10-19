@@ -16,6 +16,8 @@ import { getUserErrorMessage, logCryptoFailure } from './errors.mjs';
 import { countPassphraseCharacters, estimatePassphraseStrength, generatePassphrase } from './passphrase.mjs';
 import { HASH_DIGEST_LENGTHS, digestMatches, normalizeExpectedDigest } from './hash-verification.mjs';
 import { serializeHashResultsCsv } from './hash-results.mjs';
+import { isHashFileSizeAllowed } from './hashing.mjs';
+import { supportsAesGcmKeySize } from './aes-gcm-support.mjs';
 
 (function(){
 'use strict';
@@ -28,8 +30,15 @@ const inp=$('inp'),key=$('key'),out=$('out'),mode=$('mode'),status=$('status'),
   expectedHash=$('expectedHash'),expectedHashAlgorithm=$('expectedHashAlgorithm'),
   keyStrengthMeter=$('keyStrengthMeter'),
   keyStrengthStatus=$('keyStrengthStatus'),keyLengthStatus=$('keyLengthStatus');
+const aes192Option=$('aesKeySize').querySelector('option[value="192"]');
+const aesKeySizeHint=$('aesKeySizeHint');
+const defaultAesKeySizeHint=aesKeySizeHint.textContent;
+aes192Option.disabled=true;
+aesKeySizeHint.textContent='Checking whether this browser supports AES-192-GCM.';
 const subtle=window.crypto&&crypto.subtle;
 let locked=false,operationGeneration=0,operationBusy=false,hashGeneration=0;
+let activeHashWorker=null,cancelActiveHash=null;
+let legacyWarningAcknowledged=false,lastSelectedMode=mode.value;
 let lastEncryptedToken=null;
 let legacyMigrationText=null;
 let latestHashResults=[];
@@ -50,6 +59,11 @@ const EMPTY='Your result will appear here.';
 const audio=createAudioController({isLocked:()=>locked});
 const MSG={auth:'Authentication failed. Check the access key or verify that the message has not been altered.',
   operation:'Encryption failed. Check your input and try again.',
+  decryptFailure:'Unable to decrypt this message. Verify the key and token, then try again.',
+  fileDecryptFailure:'Unable to decrypt this file. Verify the access key and file, then try again.',
+  fileio:'Could not read or write the file. Check the selected file, available storage, and file permissions, then try again.',
+  signature:'Signature verification failed. Check the signer public key and confirm the message was not changed.',
+  signing:'Could not create the digital signature. Check the signing key and try again.',
   format:'This is not a valid encrypted token.',nocrypto:'Web Crypto is unavailable. Open this page over HTTPS or from localhost.',
   short:'Use an access key with at least 10 characters for password-based encryption.',
   keyformat:'The RSA key is not valid PEM in the required format.',
@@ -86,6 +100,46 @@ function formatHashFileSize(bytes){
   while(size>=1024&&index<units.length-1){size/=1024;index++}
   return `${size.toFixed(size<10?1:0)} ${units[index]}`;
 }
+function cancelHashWorker(){
+  const cancel=cancelActiveHash;
+  cancelActiveHash=null;
+  activeHashWorker=null;
+  if(cancel)cancel();
+}
+function computeFileHashes(file,algorithms){
+  return new Promise((resolve,reject)=>{
+    const worker=new Worker(new URL('./hash-worker.mjs',import.meta.url),{type:'module'});
+    activeHashWorker=worker;
+    let settled=false;
+    const finish=(handler,value)=>{
+      if(settled)return;
+      settled=true;
+      if(activeHashWorker===worker){
+        activeHashWorker=null;
+        cancelActiveHash=null;
+      }
+      worker.terminate();
+      handler(value);
+    };
+    cancelActiveHash=()=>finish(reject,new Error('hash-cancelled'));
+    worker.addEventListener('message',event=>{
+      if(event.data?.type==='read-error'){
+        finish(reject,new Error('hash-read'));
+      }else if(event.data?.type==='result'){
+        finish(resolve,event.data);
+      }else{
+        finish(reject,new Error('hash-worker'));
+      }
+    },{once:true});
+    worker.addEventListener('error',()=>finish(reject,new Error('hash-worker')),{once:true});
+    worker.addEventListener('messageerror',()=>finish(reject,new Error('hash-worker')),{once:true});
+    try{
+      worker.postMessage({file,algorithms});
+    }catch{
+      finish(reject,new Error('hash-worker'));
+    }
+  });
+}
 const busy=(b,action='')=>{
   operationBusy=b;
   $('operationStatus').textContent=b?`${action}. Please wait.`:'';
@@ -116,144 +170,6 @@ function triggerDownload(blob,filename){
   anchor.click();
   setTimeout(()=>anchor.remove(),0);
   setTimeout(()=>URL.revokeObjectURL(url),60_000);
-}
-function bytesToHex(bytes){
-  return Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('').toLowerCase();
-}
-function md5Bytes(buffer){
-  const input=new Uint8Array(buffer);
-  const words=[];
-  for(let i=0;i<input.length;i+=4){
-    words.push(
-      ((input[i] || 0) & 0xff) |
-      (((input[i + 1] || 0) & 0xff) << 8) |
-      (((input[i + 2] || 0) & 0xff) << 16) |
-      (((input[i + 3] || 0) & 0xff) << 24)
-    );
-  }
-  const bitLength=input.length * 8;
-  words[bitLength >>> 5] |= 0x80 << (bitLength % 32);
-  words[(((bitLength + 64) >>> 9) << 4) + 14] = bitLength;
-
-  let a=1732584193;
-  let b=-271733879;
-  let c=-1732584194;
-  let d=271733878;
-  const FF=(aa,bb_,cc_,dd_,x,s,t)=>{
-    const n=(aa + ((bb_ & cc_) | (~bb_ & dd_)) + (x >>> 0) + t) | 0;
-    return (((n << s) | (n >>> (32 - s))) + bb_) | 0;
-  };
-  const GG=(aa,bb_,cc_,dd_,x,s,t)=>{
-    const n=(aa + ((bb_ & dd_) | (cc_ & ~dd_)) + (x >>> 0) + t) | 0;
-    return (((n << s) | (n >>> (32 - s))) + bb_) | 0;
-  };
-  const HH=(aa,bb_,cc_,dd_,x,s,t)=>{
-    const n=(aa + (bb_ ^ cc_ ^ dd_) + (x >>> 0) + t) | 0;
-    return (((n << s) | (n >>> (32 - s))) + bb_) | 0;
-  };
-  const II=(aa,bb_,cc_,dd_,x,s,t)=>{
-    const n=(aa + (cc_ ^ (bb_ | ~dd_)) + (x >>> 0) + t) | 0;
-    return (((n << s) | (n >>> (32 - s))) + bb_) | 0;
-  };
-
-  for(let i=0;i<words.length;i += 16){
-    const aa=a,bb_=b,cc_=c,dd_=d;
-    a=FF(a,b,c,d,words[i+0],7,-680876936);
-    d=FF(d,a,b,c,words[i+1],12,-389564586);
-    c=FF(c,d,a,b,words[i+2],17,606105819);
-    b=FF(b,c,d,a,words[i+3],22,-1044525330);
-    a=FF(a,b,c,d,words[i+4],7,-176418897);
-    d=FF(d,a,b,c,words[i+5],12,1200080426);
-    c=FF(c,d,a,b,words[i+6],17,-1473231341);
-    b=FF(b,c,d,a,words[i+7],22,-45705983);
-    a=FF(a,b,c,d,words[i+8],7,1770035416);
-    d=FF(d,a,b,c,words[i+9],12,-1958414417);
-    c=FF(c,d,a,b,words[i+10],17,-42063);
-    b=FF(b,c,d,a,words[i+11],22,-1990404162);
-    a=FF(a,b,c,d,words[i+12],7,1804603682);
-    d=FF(d,a,b,c,words[i+13],12,-40341101);
-    c=FF(c,d,a,b,words[i+14],17,-1502002290);
-    b=FF(b,c,d,a,words[i+15],22,1236535329);
-
-    a=GG(a,b,c,d,words[i+1],5,-165796510);
-    d=GG(d,a,b,c,words[i+6],9,-1069501632);
-    c=GG(c,d,a,b,words[i+11],14,643717713);
-    b=GG(b,c,d,a,words[i+0],20,-373897302);
-    a=GG(a,b,c,d,words[i+5],5,-701558691);
-    d=GG(d,a,b,c,words[i+10],9,38016083);
-    c=GG(c,d,a,b,words[i+15],14,-660478335);
-    b=GG(b,c,d,a,words[i+4],20,-405537848);
-    a=GG(a,b,c,d,words[i+9],5,568446438);
-    d=GG(d,a,b,c,words[i+14],9,-1019803690);
-    c=GG(c,d,a,b,words[i+3],14,-187363961);
-    b=GG(b,c,d,a,words[i+8],20,1163531501);
-    a=GG(a,b,c,d,words[i+13],5,-1444681467);
-    d=GG(d,a,b,c,words[i+2],9,-51403784);
-    c=GG(c,d,a,b,words[i+7],14,1735328473);
-    b=GG(b,c,d,a,words[i+12],20,-1926607734);
-
-    a=HH(a,b,c,d,words[i+5],4,-378558);
-    d=HH(d,a,b,c,words[i+8],11,-2022574463);
-    c=HH(c,d,a,b,words[i+11],16,1839030562);
-    b=HH(b,c,d,a,words[i+14],23,-35309556);
-    a=HH(a,b,c,d,words[i+1],4,-1530992060);
-    d=HH(d,a,b,c,words[i+4],11,1272893353);
-    c=HH(c,d,a,b,words[i+7],16,-155497632);
-    b=HH(b,c,d,a,words[i+10],23,-1094730640);
-    a=HH(a,b,c,d,words[i+13],4,681279174);
-    d=HH(d,a,b,c,words[i+0],11,-358537222);
-    c=HH(c,d,a,b,words[i+3],16,-722521979);
-    b=HH(b,c,d,a,words[i+6],23,76029189);
-    a=HH(a,b,c,d,words[i+9],4,-640364487);
-    d=HH(d,a,b,c,words[i+12],11,-421815835);
-    c=HH(c,d,a,b,words[i+15],16,530742520);
-    b=HH(b,c,d,a,words[i+2],23,-995338651);
-
-    a=II(a,b,c,d,words[i+0],6,-198630844);
-    d=II(d,a,b,c,words[i+7],10,1126891415);
-    c=II(c,d,a,b,words[i+14],15,-1416354905);
-    b=II(b,c,d,a,words[i+5],21,-57434055);
-    a=II(a,b,c,d,words[i+12],6,1700485571);
-    d=II(d,a,b,c,words[i+3],10,-1894986606);
-    c=II(c,d,a,b,words[i+10],15,-1051523);
-    b=II(b,c,d,a,words[i+1],21,-2054922799);
-    a=II(a,b,c,d,words[i+8],6,1873313359);
-    d=II(d,a,b,c,words[i+15],10,-30611744);
-    c=II(c,d,a,b,words[i+6],15,-1560198380);
-    b=II(b,c,d,a,words[i+13],21,1309151649);
-    a=II(a,b,c,d,words[i+4],6,-145523070);
-    d=II(d,a,b,c,words[i+11],10,-1120210379);
-    c=II(c,d,a,b,words[i+2],15,718787259);
-    b=II(b,c,d,a,words[i+9],21,-343485551);
-
-    a=(a + aa) | 0;
-    b=(b + bb_) | 0;
-    c=(c + cc_) | 0;
-    d=(d + dd_) | 0;
-  }
-
-  const digestBytes=new Uint8Array(16);
-  const out=[a >>> 0, b >>> 0, c >>> 0, d >>> 0];
-  for(let i=0;i<4;i++){
-    for(let j=0;j<4;j++){
-      digestBytes[i * 4 + j] = (out[i] >>> (j * 8)) & 0xff;
-    }
-  }
-  return digestBytes;
-}
-async function computeFileHash(algorithm,buffer){
-  switch(algorithm){
-    case 'md5':
-      return bytesToHex(md5Bytes(buffer));
-    case 'sha1':
-      return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-1',buffer)));
-    case 'sha256':
-      return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer)));
-    case 'sha512':
-      return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-512',buffer)));
-    default:
-      throw new Error(`Unsupported hash algorithm: ${algorithm}`);
-  }
 }
 function setHashMessage(text,isError=false){
   hashOutput.innerHTML='';
@@ -301,6 +217,7 @@ function accessKeyLengthError(value){
 }
 function clearHashWorkspace(){
   hashGeneration++;
+  cancelHashWorker();
   hashInput.value='';
   hashSelected.textContent='No file chosen';
   expectedHash.value='';
@@ -318,6 +235,7 @@ function exportHashResults(){
 }
 async function handleHashFileSelect(fileList,announce=true){
   const generation=++hashGeneration;
+  cancelHashWorker();
   const files=[...fileList || []];
   latestHashResults=[];
   $('exportHashResults').disabled=true;
@@ -362,11 +280,21 @@ async function handleHashFileSelect(fileList,announce=true){
   let encounteredError=false;
   for(const [fileIndex,file] of files.entries()){
     $('hashProgress').textContent=`Calculating ${fileIndex+1} of ${files.length}: ${file.name}`;
-    let fileBuffer;
-    try{fileBuffer=await file.arrayBuffer()}
-    catch{
+    if(generation!==hashGeneration)return;
+    let hashResults=null;
+    let readFailed=false;
+    if(isHashFileSizeAllowed(file.size)){
+      try{
+        hashResults=await computeFileHashes(file,[...algorithms]);
+      }catch(error){
+        if(generation!==hashGeneration)return;
+        readFailed=error.message==='hash-read';
+        if(!readFailed)hashResults={digests:Object.fromEntries([...algorithms].map(algorithm=>[algorithm,null]))};
+      }
+    }
+    if(generation!==hashGeneration)return;
+    if(readFailed){
       encounteredError=true;
-      if(generation!==hashGeneration)return;
       const item=document.createElement('article');
       item.className='hash-file-result';
       const title=document.createElement('h3');
@@ -420,8 +348,8 @@ async function handleHashFileSelect(fileList,announce=true){
       digestActions.append(value,copyButton);
       row.append(label,digestActions);
       list.appendChild(row);
-      try{
-        const digest=await computeFileHash(algorithm,fileBuffer);
+      const digest=hashResults?.digests[algorithm];
+      if(digest){
         value.textContent=digest;
         copyButton.disabled=false;
         const result={filename:file.name,size:file.size,algorithm,digest,expectedMatch:null,status:'calculated'};
@@ -435,22 +363,28 @@ async function handleHashFileSelect(fileList,announce=true){
           row.appendChild(verdict);
         }
         latestHashResults.push(result);
-        if(generation!==hashGeneration)return;
-      }catch(error){
-        if(generation!==hashGeneration)return;
+      }else{
         encounteredError=true;
-        value.textContent='Unavailable';
+        value.textContent=!isHashFileSizeAllowed(file.size)
+          ?'Exceeds 256 MiB hashing limit'
+          :'Unavailable';
         copyButton.disabled=true;
         row.style.color='var(--danger)';
         latestHashResults.push({
-          filename:file.name,size:file.size,algorithm,digest:'',expectedMatch:null,status:'unavailable'
+          filename:file.name,size:file.size,algorithm,digest:'',expectedMatch:null,
+          status:!isHashFileSizeAllowed(file.size)?'too large':'unavailable'
         });
       }
     }
-    item.appendChild(title);
-    item.appendChild(list);
+    if(!isHashFileSizeAllowed(file.size)){
+      const message=document.createElement('p');
+      message.className='hash-message error';
+      message.textContent='Hashing is limited to 256 MiB per file to reduce browser memory pressure.';
+      item.append(title,message,list);
+    }else{
+      item.append(title,list);
+    }
     hashOutput.appendChild(item);
-    fileBuffer=null;
   }
   $('exportHashResults').disabled=!latestHashResults.length;
   const successfulDigests=latestHashResults.filter(result=>result.status==='calculated').length;
@@ -505,6 +439,34 @@ function refresh(){
   audio.setNarrationKeySize(aesKeyBits);
   audio.setNarrationRsaKeySize(rsaKeyBits);
   updateActionButtons();
+}
+function disableAes192(message){
+  aes192Option.disabled=true;
+  aes192Option.textContent='192 bits · 24-byte key · Unavailable in this browser';
+  aesKeySizeHint.textContent=message;
+  if($('aesKeySize').value==='192'){
+    $('aesKeySize').value='256';
+    invalidateMessageResult();
+    refresh();
+  }
+}
+async function detectAes192Support(){
+  if(!subtle){
+    disableAes192('Web Crypto is unavailable, so AES-192 support could not be checked.');
+    return;
+  }
+  try{
+    if(await supportsAesGcmKeySize(subtle,192)){
+      aes192Option.disabled=false;
+      aes192Option.textContent='192 bits · 24-byte key';
+      aesKeySizeHint.textContent=defaultAesKeySizeHint;
+      return;
+    }
+    disableAes192('This browser does not support AES-192-GCM. Choose AES-128 or AES-256. Existing AES-192 tokens may not decrypt in this browser.');
+  }catch(error){
+    logCryptoFailure(error,false);
+    disableAes192('AES-192-GCM support could not be confirmed, so this option is disabled. Choose AES-128 or AES-256.');
+  }
 }
 async function run(dec){
   if(locked||operationBusy)return;
@@ -685,7 +647,17 @@ async function runFile(decrypting){
   let pickerPromise=null;
   if(useSavePicker){
     try{pickerPromise=window.showSaveFilePicker({suggestedName})}
-    catch(error){fileStatus.textContent='Could not open the save dialog. Check browser permissions and try again.';fileStatus.classList.add('error');audio.announceStatus('fileFailed');return}
+    catch(error){
+      if(error.name==='AbortError'){
+        fileStatus.textContent='File save was cancelled.';
+        audio.announceStatus('fileCancelled');
+        return;
+      }
+      fileStatus.textContent='Could not open the save dialog. Check browser permissions and try again.';
+      fileStatus.classList.add('error');
+      audio.announceStatus('fileFailed');
+      return;
+    }
   }
   busy(true,decrypting?'Decrypting file':'Encrypting file');
   fileStatus.textContent=`${decrypting?'Decrypting':'Encrypting'} file. Please wait.`;
@@ -693,6 +665,14 @@ async function runFile(decrypting){
   let writable=null;
   let committed=false;
   const parts=[];
+  const writeOutputChunk=async chunk=>{
+    if(!writable){
+      parts.push(chunk);
+      return;
+    }
+    try{await writable.write(chunk)}
+    catch{throw new Error('fileio')}
+  };
   let lastProgress=-1;
   const reportProgress=(complete,total)=>{
     if(locked||generation!==operationGeneration)throw new Error('cancelled');
@@ -705,33 +685,40 @@ async function runFile(decrypting){
   };
   try{
     if(!subtle)throw new Error('nocrypto');
-    if(pickerPromise)writable=await pickerPromise.then(handle=>handle.createWritable());
+    if(pickerPromise){
+      try{writable=await pickerPromise.then(handle=>handle.createWritable({keepExistingData:false}))}
+      catch(error){
+        if(error.name==='AbortError')throw error;
+        throw new Error('fileio');
+      }
+    }
     if(decrypting){
       const prefix=new TextDecoder().decode(await file.slice(0,5).arrayBuffer());
       if(prefix==='HWF1.'){
         if(file.size>LEGACY_MAX_FILE_TOKEN_CHARS)throw new Error('filetoolarge');
         const plaintext=await decryptFileToken((await file.text()).trim(),password);
       if(locked||generation!==operationGeneration)throw new Error('cancelled');
-        if(writable)await writable.write(plaintext);
-        else parts.push(plaintext);
+        await writeOutputChunk(plaintext);
       }else{
         const magic=new Uint8Array(await file.slice(0,FILE_MAGIC.length).arrayBuffer());
         if(!FILE_MAGIC.every((byte,index)=>magic[index]===byte))throw new Error('fileformat');
         await decryptFileStream(file,password,async chunk=>{
           if(locked||generation!==operationGeneration)throw new Error('cancelled');
-          if(writable)await writable.write(chunk);
-          else if(chunk.length)parts.push(chunk);
+          if(chunk.length)await writeOutputChunk(chunk);
         },reportProgress);
       }
     }else{
       await encryptFileStream(file,password,async chunk=>{
         if(locked||generation!==operationGeneration)throw new Error('cancelled');
-        if(writable)await writable.write(chunk);
-        else parts.push(chunk);
+        await writeOutputChunk(chunk);
       },reportProgress);
     }
     if(locked||generation!==operationGeneration)throw new Error('cancelled');
-    if(writable){await writable.close();committed=true}
+    if(writable){
+      try{await writable.close()}
+      catch{throw new Error('fileio')}
+      committed=true;
+    }
     else triggerDownload(new Blob(parts,{type:'application/octet-stream'}),suggestedName);
     fileStatus.textContent=decrypting
       ?`Decrypted file saved as ${suggestedName}. The original filename and type are not recoverable.`
@@ -740,13 +727,14 @@ async function runFile(decrypting){
   }catch(error){
     const stale=locked||generation!==operationGeneration;
     let cleanupFailed=false;
+    parts.length=0;
     if(writable&&!committed){
       try{await writable.abort()}
       catch(abortError){
         logCryptoFailure(abortError,true);
         cleanupFailed=true;
         if(!stale){
-          fileStatus.textContent='The operation failed and the incomplete output could not be removed. Check the selected save location and delete any partial file.';
+          fileStatus.textContent='The operation failed and the incomplete output could not be discarded. No output was reported as saved. Check the selected save location and remove any partial file before using it.';
           fileStatus.classList.add('error');
         }
       }
@@ -758,10 +746,12 @@ async function runFile(decrypting){
       return;
     }
     logCryptoFailure(error,decrypting);
-    if(cleanupFailed){audio.announceStatus('fileFailed');return}
-    fileStatus.textContent=error.message==='fileformat'?MSG.fileformat:getUserErrorMessage(error,decrypting,MSG);
+    if(cleanupFailed){audio.announceStatus('fileOutputFailed');return}
+    fileStatus.textContent=error.message==='fileformat'
+      ?MSG.fileformat
+      :getUserErrorMessage(error,decrypting,MSG,'file');
     fileStatus.classList.add('error');
-    audio.announceStatus('fileFailed');
+    audio.announceStatus(error.message==='fileio'?'fileOutputFailed':'fileFailed');
   }finally{busy(false)}
 }
 function downloadMessageToken(){
@@ -1083,7 +1073,21 @@ hashDropzone.addEventListener('drop',event=>{
     handleHashFileSelect(hashInput.files);
   }
 });
-mode.addEventListener('change',()=>{invalidateMessageResult();refresh()});
+mode.addEventListener('change',()=>{
+  if(mode.value==='legacy'&&!legacyWarningAcknowledged){
+    const accepted=window.confirm(
+      'Grumpy v2 is cryptographically insecure. It does not provide reliable confidentiality or tamper detection and must never protect sensitive information. Continue only for legacy compatibility or testing?'
+    );
+    if(!accepted){
+      mode.value=lastSelectedMode;
+      return;
+    }
+    legacyWarningAcknowledged=true;
+  }
+  lastSelectedMode=mode.value;
+  invalidateMessageResult();
+  refresh();
+});
 $('aesKeySize').addEventListener('change',()=>{invalidateMessageResult();refresh()});
 $('rsaKeySize').addEventListener('change',()=>{invalidateMessageResult();refresh()});
 $('generateRsa').addEventListener('click',generateRsa);
@@ -1183,4 +1187,5 @@ createWorkspaceLock({
   }
 });
 refresh();
+void detectAes192Support();
 })();

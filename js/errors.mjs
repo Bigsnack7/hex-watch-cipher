@@ -1,20 +1,21 @@
-export const DECRYPT_FAILURE_MESSAGE =
-  'Unable to decrypt this message. Verify the key and token, then try again.';
-
 const SAFE_ERROR_CODES = new Set([
-  'auth', 'decrypt', 'format', 'keyformat', 'keylarge', 'keytoolarge', 'rsasizelimit',
-  'keyweak', 'nocrypto', 'publickey', 'short', 'toolarge', 'filetoolarge',
-  'signformat', 'signunsupported', 'signingprivate', 'signingpublic',
-  'signingkeyformat', 'signingkeymismatch'
+  'auth', 'decrypt', 'format', 'fileformat', 'fileio', 'filetoolarge',
+  'keyformat', 'keylarge', 'keysize', 'keytoolarge', 'keyweak', 'nocrypto',
+  'publickey', 'rsasizelimit', 'short', 'signature', 'signformat',
+  'signing', 'signingkeyformat', 'signingkeymismatch', 'signingprivate',
+  'signingpublic', 'signunsupported', 'toolarge', 'aeskeysize', 'cancelled'
 ]);
 
-export function getUserErrorMessage(error, decrypting, messages) {
+export function getUserErrorMessage(error, decrypting, messages, context = 'message') {
+  if (error.message === 'fileio' || error.message === 'signature' || error.message === 'signing') {
+    return messages[error.message];
+  }
   if (decrypting) {
     if (error.message === 'nocrypto' || error.message === 'toolarge' || error.message === 'keytoolarge' ||
         error.message === 'filetoolarge') {
       return messages[error.message];
     }
-    return DECRYPT_FAILURE_MESSAGE;
+    return context === 'file' ? messages.fileDecryptFailure : messages.decryptFailure;
   }
   if (error.message === 'nocrypto' || error.message === 'toolarge' || error.message === 'keytoolarge' ||
       error.message === 'filetoolarge') {
@@ -32,7 +33,8 @@ export function getUserErrorMessage(error, decrypting, messages) {
 }
 
 export function logCryptoFailure(error, decrypting) {
-  if (globalThis.location?.hostname !== 'localhost' && globalThis.location?.hostname !== '127.0.0.1') {
+  if (globalThis.self !== globalThis.top ||
+      (globalThis.location?.hostname !== 'localhost' && globalThis.location?.hostname !== '127.0.0.1')) {
     return;
   }
   console.debug('Hex Watch Cipher operation failed', {

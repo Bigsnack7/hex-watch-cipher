@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self'; font-src 'self'; media-src 'none'; connect-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self'; font-src 'self'; media-src 'none'; connect-src 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="application-name" content="Hex Watch Cipher">
 <meta property="og:title" content="Hex Watch Cipher">
@@ -58,7 +58,7 @@
         <label for="aesKeySize">AES-GCM key size</label>
         <select id="aesKeySize">
           <option value="128">128 bits · 16-byte key</option>
-          <option value="192">192 bits · 24-byte key</option>
+          <option value="192" disabled>192 bits · 24-byte key · Checking browser support</option>
           <option value="256" selected>256 bits · 32-byte key · Recommended</option>
         </select>
         <span class="field-hint" id="aesKeySizeHint">This selects the derived AES key size, not the number of characters in your passphrase. Keep using a long, unique passphrase; Unicode characters do not equal bytes. The encrypted token records its key size and decrypts automatically.</span>
@@ -202,7 +202,7 @@
           <span id="hashSelected" class="hash-selected">No file chosen</span>
           <button id="exportHashResults" type="button" disabled>Export results CSV</button>
         </div>
-        <p class="field-hint hash-memory-note">For each file, selected algorithms share one in-memory read. Very large files may require substantial available memory; hashing is local and does not stream through Web Crypto.</p>
+        <p class="field-hint hash-memory-note">Hashing runs in a same-origin Web Worker to keep the interface responsive. Files are limited to 256 MiB per file; SHA digests require the complete file in memory, while MD5 is processed incrementally in chunks. This limit is separate from file encryption. Hashing is local; MD5 and SHA-1 are for compatibility only.</p>
         <div class="hash-algorithms" aria-label="Hash algorithms">
           <label><input type="checkbox" name="hashAlgorithm" value="md5" checked> MD5</label>
           <label><input type="checkbox" name="hashAlgorithm" value="sha1" checked> SHA1</label>

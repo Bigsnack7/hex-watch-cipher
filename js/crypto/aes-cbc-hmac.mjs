@@ -39,14 +39,25 @@ export async function decryptCbcHmac(token, password) {
   const body = raw.slice(0, -32);
   const tag = raw.slice(-32);
   const [encryptionKey, macKey] = await deriveCbcKeys(password, raw.slice(0, 16));
-  if (!await subtle.verify('HMAC', macKey, tag, concat(encoder.encode(CBC_TAG), body))) {
+  let authenticated;
+  try {
+    authenticated = await subtle.verify('HMAC', macKey, tag, concat(encoder.encode(CBC_TAG), body));
+  } catch {
     throw new Error('auth');
   }
-  const plaintext = decoder.decode(await subtle.decrypt(
-    { name: 'AES-CBC', iv: raw.slice(16, 32) },
-    encryptionKey,
-    raw.slice(32, -32)
-  ));
+  if (!authenticated) {
+    throw new Error('auth');
+  }
+  let plaintext;
+  try {
+    plaintext = decoder.decode(await subtle.decrypt(
+      { name: 'AES-CBC', iv: raw.slice(16, 32) },
+      encryptionKey,
+      raw.slice(32, -32)
+    ));
+  } catch {
+    throw new Error('auth');
+  }
   assertMessageSize(plaintext);
   return plaintext;
 }
