@@ -14,6 +14,7 @@ import {
 } from '../js/crypto.mjs';
 import { writePem } from '../js/crypto/pem.mjs';
 import * as legacyModule from '../js/crypto/legacy.mjs';
+import { getUserErrorMessage } from '../js/errors.mjs';
 
 const password = 'correct-horse-battery-staple';
 
@@ -28,8 +29,8 @@ test('AES-GCM round-trips empty and Unicode messages and rejects tampering/wrong
     const token = await encryptAesGcm(message, password);
     assert.ok(token.startsWith(AES_TAG));
     assert.equal(await decryptAesGcm(token, password), message);
-    await assert.rejects(decryptAesGcm(token, `${password}!`));
-    await assert.rejects(decryptAesGcm(tamper(token, AES_TAG, 28), password));
+    await assert.rejects(decryptAesGcm(token, `${password}!`), error => error.message === 'auth');
+    await assert.rejects(decryptAesGcm(tamper(token, AES_TAG, 28), password), error => error.message === 'auth');
   }
 });
 
@@ -41,6 +42,8 @@ test('AES-GCM rejects malformed and truncated ciphertext without returning plain
     const truncated = AES_TAG + payload.subarray(0, length).toString('base64url');
     await assert.rejects(decryptAesGcm(truncated, password), `truncation to ${length} bytes must fail`);
   }
+  const truncatedCiphertext = AES_TAG + payload.subarray(0, -1).toString('base64url');
+  await assert.rejects(decryptAesGcm(truncatedCiphertext, password), error => error.message === 'auth');
   await assert.rejects(decryptAesGcm('CT1.not*base64', password), error => error.message === 'format');
 });
 
@@ -139,6 +142,18 @@ test('AES-GCM keeps decrypting legacy CT1 tokens and rejects authenticated inval
   ));
   const legacyToken = LEGACY_AES_TAG + Buffer.concat([legacySalt, legacyIv, legacyCiphertext]).toString('base64url');
   assert.equal(await decryptAesGcm(legacyToken, password), 'Legacy CT1 message');
+  let wrongPassphraseMessage;
+  try {
+    await decryptAesGcm(legacyToken, `${password}!`);
+  } catch (error) {
+    wrongPassphraseMessage = getUserErrorMessage(error, true, {
+      decryptFailure: 'Unable to decrypt this message. Verify the key and token, then try again.'
+    });
+  }
+  assert.equal(
+    wrongPassphraseMessage,
+    'Unable to decrypt this message. Verify the key and token, then try again.'
+  );
 
   const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
@@ -162,7 +177,7 @@ test('AES-GCM keeps decrypting legacy CT1 tokens and rejects authenticated inval
     new Uint8Array([0xff])
   ));
   const token = AES_TAG + Buffer.concat([Buffer.from([32]), salt, iv, ciphertext]).toString('base64url');
-  await assert.rejects(decryptAesGcm(token, password), TypeError);
+  await assert.rejects(decryptAesGcm(token, password), error => error.message === 'auth');
 });
 
 test('RSA-OAEP hybrid encryption round-trips empty and Unicode messages and rejects tampering', async () => {
@@ -181,8 +196,8 @@ test('RSA-OAEP hybrid encryption round-trips empty and Unicode messages and reje
     assert.ok(token.startsWith(RSA_TAG));
     assert.equal(await decryptRsaHybrid(token, pair.privateKey), message);
     const bytes = Buffer.from(token.slice(RSA_TAG.length), 'base64url');
-    await assert.rejects(decryptRsaHybrid(tamper(token, RSA_TAG, bytes.length - 1), pair.privateKey));
-    await assert.rejects(decryptRsaHybrid(token, otherPair.privateKey));
+    await assert.rejects(decryptRsaHybrid(tamper(token, RSA_TAG, bytes.length - 1), pair.privateKey), error => error.message === 'auth');
+    await assert.rejects(decryptRsaHybrid(token, otherPair.privateKey), error => error.message === 'auth');
   }
 });
 
@@ -207,8 +222,8 @@ test('direct RSA-OAEP encrypts only short messages and round-trips with the matc
   );
 
   const otherPair = await generateRsaKeyPair();
-  await assert.rejects(decryptRsaDirect(boundaryToken, otherPair.privateKey));
-  await assert.rejects(decryptRsaDirect(tamper(boundaryToken, RSA_DIRECT_TAG, 0), pair.privateKey));
+  await assert.rejects(decryptRsaDirect(boundaryToken, otherPair.privateKey), error => error.message === 'auth');
+  await assert.rejects(decryptRsaDirect(tamper(boundaryToken, RSA_DIRECT_TAG, 0), pair.privateKey), error => error.message === 'auth');
 });
 
 test('RSA-first dual-key encryption requires both keys and enforces the RSA message limit', async () => {
@@ -218,8 +233,8 @@ test('RSA-first dual-key encryption requires both keys and enforces the RSA mess
     const token = await encryptRsaThenAes(message, pair.publicKey, password);
     assert.ok(token.startsWith(RSA_AES_TAG));
     assert.equal(await decryptRsaThenAes(token, pair.privateKey, password), message);
-    await assert.rejects(decryptRsaThenAes(token, pair.privateKey, `${password}!`));
-    await assert.rejects(decryptRsaThenAes(token, otherPair.privateKey, password));
+    await assert.rejects(decryptRsaThenAes(token, pair.privateKey, `${password}!`), error => error.message === 'auth');
+    await assert.rejects(decryptRsaThenAes(token, otherPair.privateKey, password), error => error.message === 'auth');
   }
 
   const boundaryMessage = 'x'.repeat(190);
@@ -246,7 +261,8 @@ test('RSA-first dual-key format rejects malformed, truncated, and modified token
   for (const offset of [0, 1, 17, 29, payload.length - 1]) {
     await assert.rejects(
       decryptRsaThenAes(tamper(token, RSA_AES_TAG, offset), pair.privateKey, password),
-      `modified field at ${offset} must fail authentication`
+      error => error.message === (offset === 0 ? 'format' : 'auth'),
+      `modified field at ${offset} must fail without releasing plaintext`
     );
   }
   const unsupportedVersion = Buffer.from(payload);
@@ -362,9 +378,12 @@ test('HWF1 file encryption round-trips binary data including the 1 MiB limit', a
 test('HWF1 authenticates its contents and rejects wrong keys, tampering, malformed and oversized inputs', async () => {
   const token = await encryptFileBytes(Uint8Array.from([0, 1, 2, 255]), password);
   const payload = Buffer.from(token.slice(FILE_TAG.length), 'base64url');
-  await assert.rejects(decryptFileToken(token, `${password}!`));
+  await assert.rejects(decryptFileToken(token, `${password}!`), error => error.message === 'auth');
   for (const offset of [0, 1, 17, 29, payload.length - 1]) {
-    await assert.rejects(decryptFileToken(tamper(token, FILE_TAG, offset), password));
+    await assert.rejects(
+      decryptFileToken(tamper(token, FILE_TAG, offset), password),
+      error => error.message === (offset === 0 ? 'format' : 'auth')
+    );
   }
   await assert.rejects(decryptFileToken(`${FILE_TAG}AB`, password), /format/);
   await assert.rejects(decryptFileToken(`${FILE_TAG}A=`, password), /format/);
@@ -434,6 +453,36 @@ test('HWF2 rejects wrong keys, tampering, truncation, and oversized files', asyn
   const oversized = Object.create(Blob.prototype);
   Object.defineProperty(oversized, 'size', { value: MAX_FILE_BYTES + 1 });
   await assert.rejects(encryptFileStream(oversized, password, () => {}), /filetoolarge/);
+});
+
+test('HWF2 rejects swapped authenticated chunks', async () => {
+  const plaintext = new Uint8Array(FILE_CHUNK_BYTES * 2).fill(0x5a);
+  const encryptedParts = [];
+  await encryptFileStream(new Blob([plaintext]), password, part => encryptedParts.push(part));
+  const encrypted = new Uint8Array(await new Blob(encryptedParts).arrayBuffer());
+  const firstChunkStart = 36;
+  const chunkLength = FILE_CHUNK_BYTES + 16;
+  const firstChunk = encrypted.slice(firstChunkStart, firstChunkStart + chunkLength);
+  const secondChunkStart = firstChunkStart + chunkLength;
+  encrypted.copyWithin(firstChunkStart, secondChunkStart, secondChunkStart + chunkLength);
+  encrypted.set(firstChunk, secondChunkStart);
+
+  await assert.rejects(
+    decryptFileStream(new Blob([encrypted]), password, () => {}),
+    error => error.message === 'auth'
+  );
+});
+
+test('HWF2 rejects a flipped bit in the authenticated header size field', async () => {
+  const encryptedParts = [];
+  await encryptFileStream(new Blob([new Uint8Array(128).fill(0x5a)]), password, part => encryptedParts.push(part));
+  const encrypted = new Uint8Array(await new Blob(encryptedParts).arrayBuffer());
+  encrypted[35] ^= 1;
+
+  await assert.rejects(
+    decryptFileStream(new Blob([encrypted]), password, () => {}),
+    error => error.message === 'format'
+  );
 });
 
 test('crypto rejects over-limit messages, oversized tokens, and malformed base64url before KDF work', async () => {

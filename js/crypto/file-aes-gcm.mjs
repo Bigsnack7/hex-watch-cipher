@@ -170,11 +170,16 @@ export async function decryptFileToken(token, password) {
   if (raw.length < LEGACY_HEADER_BYTES + LEGACY_TAG_BYTES || raw[0] !== LEGACY_VERSION) {
     throw new Error('format');
   }
-  const plaintext = new Uint8Array(await subtle.decrypt(
-    { name: 'AES-GCM', iv: raw.slice(17, 29), additionalData: LEGACY_AAD },
-    await deriveFileKey(password, raw.slice(1, 17)),
-    raw.slice(LEGACY_HEADER_BYTES)
-  ));
+  let plaintext;
+  try {
+    plaintext = new Uint8Array(await subtle.decrypt(
+      { name: 'AES-GCM', iv: raw.slice(17, 29), additionalData: LEGACY_AAD },
+      await deriveFileKey(password, raw.slice(1, 17)),
+      raw.slice(LEGACY_HEADER_BYTES)
+    ));
+  } catch {
+    throw new Error('auth');
+  }
   if (plaintext.length > LEGACY_MAX_FILE_BYTES) throw new Error('filetoolarge');
   return plaintext;
 }

@@ -158,12 +158,17 @@ export async function verifyMessageToken(signedToken, publicKeyValue) {
   if (!isEncryptedToken(token)) throw new Error('format');
 
   const publicKey = await importPublicKey(publicKeyValue);
-  const valid = await subtle.verify(
-    { name: 'ECDSA', hash: 'SHA-256' },
-    publicKey,
-    envelope.subarray(HEADER_BYTES + tokenLength),
-    concat(SIGNATURE_DOMAIN, envelope.subarray(0, HEADER_BYTES + tokenLength))
-  );
+  let valid;
+  try {
+    valid = await subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      publicKey,
+      envelope.subarray(HEADER_BYTES + tokenLength),
+      concat(SIGNATURE_DOMAIN, envelope.subarray(0, HEADER_BYTES + tokenLength))
+    );
+  } catch {
+    throw new Error('signature');
+  }
   if (!valid) throw new Error('signature');
   return { token, fingerprint: await fingerprintEcdsaPublicKey(publicKey) };
 }

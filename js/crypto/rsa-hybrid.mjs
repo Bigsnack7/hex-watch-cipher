@@ -5,6 +5,14 @@ import {
 import { readPem, writePem } from './pem.mjs';
 import { deriveAesKey } from './aes-gcm.mjs';
 
+async function decryptOrAuth(...args) {
+  try {
+    return await subtle.decrypt(...args);
+  } catch {
+    throw new Error('auth');
+  }
+}
+
 async function importRsaKey(text, format, label, usage, extractable = false) {
   requireCrypto();
   let key;
@@ -84,7 +92,13 @@ export async function decryptRsaDirect(token, pem) {
     typeof pem === 'string' ? await importRsaKey(pem, 'pkcs8', 'PRIVATE KEY', 'decrypt') : pem
   );
   if (ciphertext.length !== privateKey.algorithm.modulusLength / 8) throw new Error('format');
-  return decoder.decode(await subtle.decrypt({ name: 'RSA-OAEP' }, privateKey, ciphertext));
+  let plaintextBytes;
+  try {
+    plaintextBytes = await decryptOrAuth({ name: 'RSA-OAEP' }, privateKey, ciphertext);
+    return decoder.decode(plaintextBytes);
+  } catch {
+    throw new Error('auth');
+  }
 }
 
 export async function encryptRsaThenAes(text, pem, password) {
@@ -112,7 +126,7 @@ export async function decryptRsaThenAes(token, pem, password) {
   const raw = decodeToken(token, RSA_AES_TAG, 1 + 16 + 12 + MAX_RSA_WRAPPED_BYTES + 16);
   const headerLength = 1 + 16 + 12;
   if (raw.length < headerLength + 256 + 16 || raw[0] !== 1) throw new Error('format');
-  const rsaCiphertext = await subtle.decrypt(
+  const rsaCiphertext = await decryptOrAuth(
     {
       name: 'AES-GCM',
       iv: raw.slice(17, 29),
@@ -125,9 +139,14 @@ export async function decryptRsaThenAes(token, pem, password) {
     typeof pem === 'string' ? await importRsaKey(pem, 'pkcs8', 'PRIVATE KEY', 'decrypt') : pem
   );
   if (rsaCiphertext.byteLength !== privateKey.algorithm.modulusLength / 8) throw new Error('format');
-  const plaintext = decoder.decode(await subtle.decrypt(
-    { name: 'RSA-OAEP' }, privateKey, rsaCiphertext
-  ));
+  let plaintext;
+  try {
+    plaintext = decoder.decode(await decryptOrAuth(
+      { name: 'RSA-OAEP' }, privateKey, rsaCiphertext
+    ));
+  } catch {
+    throw new Error('auth');
+  }
   assertMessageSize(plaintext);
   return plaintext;
 }
@@ -162,13 +181,23 @@ export async function decryptRsaHybrid(token, pem) {
   const privateKey = validateRsaPrivateKey(
     typeof pem === 'string' ? await importRsaKey(pem, 'pkcs8', 'PRIVATE KEY', 'decrypt') : pem
   );
-  const rawKey = await subtle.decrypt({ name: 'RSA-OAEP' }, privateKey, raw.slice(2, ivOffset));
-  const aesKey = await subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['decrypt']);
-  const plaintext = decoder.decode(await subtle.decrypt(
-    { name: 'AES-GCM', iv: raw.slice(ivOffset, ivOffset + 12), additionalData: encoder.encode(RSA_TAG) },
-    aesKey,
-    raw.slice(ivOffset + 12)
-  ));
+  const rawKey = await decryptOrAuth({ name: 'RSA-OAEP' }, privateKey, raw.slice(2, ivOffset));
+  let aesKey;
+  try {
+    aesKey = await subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['decrypt']);
+  } catch {
+    throw new Error('auth');
+  }
+  let plaintext;
+  try {
+    plaintext = decoder.decode(await decryptOrAuth(
+      { name: 'AES-GCM', iv: raw.slice(ivOffset, ivOffset + 12), additionalData: encoder.encode(RSA_TAG) },
+      aesKey,
+      raw.slice(ivOffset + 12)
+    ));
+  } catch {
+    throw new Error('auth');
+  }
   assertMessageSize(plaintext);
   return plaintext;
 }

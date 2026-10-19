@@ -25,7 +25,7 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(html, /font-src 'self'/);
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /frame-src 'none'/);
-  assert.match(html, /worker-src 'none'/);
+  assert.match(html, /worker-src 'self'/);
   assert.match(html, /manifest-src 'none'/);
   assert.doesNotMatch(html, /unsafe-inline/);
   assert.doesNotMatch(html, /<script\s*>/i);
@@ -65,9 +65,10 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   );
   assert.match(html, /id="exportHashResults" type="button" disabled/);
   assert.match(html, /id="hashProgress" class="hash-progress" role="status"/);
-  assert.match(html, /Very large files may require substantial available memory/);
+  assert.match(html, /Hashing runs in a same-origin Web Worker/);
+  assert.match(html, /limited to 256 MiB per file/);
   assert.match(html, /Original filenames and types are not stored/i);
-  assert.match(html, /<select id="aesKeySize">[\s\S]*?value="128">128 bits · 16-byte key[\s\S]*?value="192">192 bits · 24-byte key[\s\S]*?value="256" selected>256 bits · 32-byte key · Recommended/);
+  assert.match(html, /<select id="aesKeySize">[\s\S]*?value="128">128 bits · 16-byte key[\s\S]*?value="192" disabled>192 bits · 24-byte key · Checking browser support[\s\S]*?value="256" selected>256 bits · 32-byte key · Recommended/);
   assert.match(html, /id="aesKeySizeHint"/);
   assert.match(html, /<option value="aes">AES-GCM · Passphrase-based \(Recommended\)<\/option>/);
   assert.match(html, /<option value="cbc">AES-CBC \+ HMAC · Compatibility<\/option>/);
@@ -101,6 +102,9 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.equal(projectIcon.readUInt32BE(20), 512);
   const app = await readFile(new URL('js/app.js', root), 'utf8');
   assert.match(app, /const operationControls=\[[\s\S]*?fileInput,[\s\S]*?\$\('verifySignature'\)\s*\]/);
+  assert.match(app, /supportsAesGcmKeySize\(subtle,192\)/);
+  assert.match(app, /This browser does not support AES-192-GCM/);
+  assert.match(app, /AES-192-GCM support could not be confirmed, so this option is disabled/);
   assert.match(app, /const unavailable=locked\|\|operationBusy;\s*operationControls\.forEach\(control=>\{\s*control\.disabled=unavailable\|\|\(control\.id==='signMessage'&&mode\.value==='legacy'\);\s*\}\)/);
   assert.match(app, /async function run\(dec\)\{\s*if\(locked\|\|operationBusy\)return;/);
   assert.match(app, /async function runFile\(decrypting\)\{\s*if\(locked\|\|operationBusy\)return;/);
@@ -142,10 +146,24 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(app, /if\(!file\).*?audio\.announceStatus\('fileFailed'\)/);
   assert.match(app, /if\(!pw\).*?audio\.announceStatus\('operationFailed'\)/);
   assert.match(app, /audio\.announceStatus\('legacyMigrationPrepared'\)/);
+  assert.match(app, /const writeOutputChunk=async chunk=>\{[\s\S]*?await writable\.write\(chunk\)[\s\S]*?throw new Error\('fileio'\)/);
+  assert.match(app, /handle\.createWritable\(\{keepExistingData:false\}\)/);
+  assert.match(app, /writable\.close\(\)[\s\S]*?throw new Error\('fileio'\)/);
+  assert.match(app, /parts\.length=0;[\s\S]*?await writable\.abort\(\)/);
+  assert.match(app, /if\(writable&&!committed\)[\s\S]*?await writable\.abort\(\)/);
+  assert.match(app, /if\(writable\)\{[\s\S]*?await writable\.close\(\)[\s\S]*?committed=true;/);
+  assert.match(app, /No output was reported as saved\.[\s\S]*?remove any partial file before using it\./);
+  assert.match(app, /getUserErrorMessage\(error,decrypting,MSG,'file'\)/);
+  assert.match(app, /decB\.addEventListener\('click',\(\)=>run\(true\)\)/);
+  assert.match(app, /fileDecryptB\.addEventListener\('click',\(\)=>runFile\(true\)\)/);
+  assert.match(app, /getUserErrorMessage\(e,dec,MSG\)/);
+  assert.match(app, /error\.message==='fileio'\?'fileOutputFailed':'fileFailed'/);
+  assert.match(app, /if\(error\.name==='AbortError'&&!cleanupFailed\)[\s\S]*?audio\.announceStatus\('fileCancelled'\)/);
+  assert.match(app, /catch\(error\)\{\s*if\(error\.name==='AbortError'\)\{\s*fileStatus\.textContent='File save was cancelled\.';\s*audio\.announceStatus\('fileCancelled'\)/);
   assert.match(app, /anchor\.download=filename;[\s\S]*?anchor\.click\(\);[\s\S]*?setTimeout\(\(\)=>anchor\.remove\(\),0\)/);
   assert.match(app, /triggerDownload\(new Blob\(\[lastEncryptedToken\],\{type:'text\/plain;charset=utf-8'\}\),'encrypted-message\.txt'\)/);
   assert.match(app, /function invalidateMessageResult\(\)\{\s*setMessageDownload\(null\);\s*clearLegacyMigration\(\);\s*\$\('signatureStatus'\)\.textContent='';\s*show\(EMPTY\);\s*\}/);
-  assert.match(app, /mode\.addEventListener\('change',\(\)=>\{invalidateMessageResult\(\);refresh\(\)\}\)/);
+  assert.match(app, /mode\.addEventListener\('change',\(\)=>\{[\s\S]*?window\.confirm\([\s\S]*?mode\.value=lastSelectedMode;[\s\S]*?invalidateMessageResult\(\);refresh\(\)/);
   assert.match(app, /\$\('aesKeySize'\)\.addEventListener\('change',\(\)=>\{invalidateMessageResult\(\);refresh\(\)\}\)/);
   assert.match(app, /\$\('rsaKeySize'\)\.addEventListener\('change',\(\)=>\{invalidateMessageResult\(\);refresh\(\)\}\)/);
   assert.match(app, /inp\.addEventListener\('input',invalidateMessageResult\)/);
@@ -159,10 +177,18 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.doesNotMatch(app, /sha384|SHA-384|sha256Indicators|checksumEntries|parseChecksumManifest|parseSha256Indicators/);
   assert.match(app, /serializeHashResultsCsv\(latestHashResults\)/);
   assert.match(app, /\$\('exportHashResults'\)\.disabled=unavailable\|\|!latestHashResults\.length/);
-  assert.match(app, /fileBuffer=await file\.arrayBuffer\(\)/);
-  assert.match(app, /computeFileHash\(algorithm,fileBuffer\)/);
+  assert.match(app, /new Worker\(new URL\('\.\/hash-worker\.mjs',import\.meta\.url\),\{type:'module'\}\)/);
+  assert.match(app, /computeFileHashes\(file,\[\.\.\.algorithms\]\)/);
+  assert.match(app, /cancelHashWorker\(\)/);
+  assert.match(app, /isHashFileSizeAllowed\(file\.size\)/);
+  assert.match(app, /Grumpy v2 is cryptographically insecure\.[\s\S]*Continue only for legacy compatibility or testing\?/);
+  const legacySelection = app.match(/mode\.addEventListener\('change',\(\)=>\{([\s\S]*?)\n\}\);/)?.[1];
+  assert.ok(legacySelection);
+  assert.match(legacySelection, /if\(mode\.value==='legacy'&&!legacyWarningAcknowledged\)/);
+  assert.match(legacySelection, /if\(!accepted\)\{\s*mode\.value=lastSelectedMode;\s*return;\s*\}/);
+  assert.ok(legacySelection.indexOf('legacyWarningAcknowledged=true;') > legacySelection.indexOf('if(!accepted)'));
   assert.match(app, /status:'read error'/);
-  assert.match(app, /status:'unavailable'/);
+  assert.match(app, /status:!isHashFileSizeAllowed\(file\.size\)\?'too large':'unavailable'/);
   assert.match(app, /Could not read this file\. Try a smaller file or check browser memory\./);
   assert.match(app, /Copy \$\{algorithm\.toUpperCase\(\)\} digest for \$\{file\.name\}/);
   assert.match(app, /copyText\(value\.textContent,value\)/);
@@ -231,6 +257,35 @@ test('reload starts with cleared sensitive fields and no persisted crypto state'
   assert.match(html, /<textarea id="rsaPrivate"[^>]*><\/textarea>/);
   assert.match(html, /id="out"[^>]*>Your result will appear here\.<\/div>/);
   assert.doesNotMatch(app, /\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b|\bdocument\.cookie\b/);
+});
+
+test('Cloudflare Pages response headers mirror the meta CSP and add frame protection', async () => {
+  const [html, headers] = await Promise.all([
+    readFile(new URL('index.html', root), 'utf8'),
+    readFile(new URL('_headers', root), 'utf8')
+  ]);
+  const metaPolicy = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)?.[1];
+  const responsePolicy = headers.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1];
+  assert.ok(metaPolicy);
+  assert.match(headers, /^\/\*/);
+  assert.equal(responsePolicy, `${metaPolicy}; frame-ancestors 'none'`);
+  assert.match(responsePolicy, /frame-ancestors 'none'/);
+  assert.match(headers, /X-Content-Type-Options: nosniff/);
+  assert.match(headers, /Referrer-Policy: no-referrer/);
+  assert.match(headers, /X-Frame-Options: DENY/);
+});
+
+test('file digest worker reads each file off the UI thread and reports per-algorithm failures', async () => {
+  const worker = await readFile(new URL('js/hash-worker.mjs', root), 'utf8');
+  const hashing = await readFile(new URL('js/hashing.mjs', root), 'utf8');
+  assert.match(worker, /file\.arrayBuffer\(\)/);
+  assert.match(worker, /file\.slice\(offset,\s*offset\s*\+\s*HASH_CHUNK_BYTES\)\.arrayBuffer\(\)/);
+  assert.match(worker, /createMd5\(\)/);
+  assert.match(worker, /md5\.update\(new Uint8Array\(chunk\)\)/);
+  assert.match(worker, /computeDigest\(algorithm,\s*buffer\)/);
+  assert.match(worker, /digests\[algorithm\]\s*=\s*null/);
+  assert.match(worker, /self\.postMessage\(\{\s*type:\s*'result',\s*digests\s*\}\)/);
+  assert.match(hashing, /export function createMd5\(\)/);
 });
 
 test('sound-effects controls and playback code are fully removed', async () => {

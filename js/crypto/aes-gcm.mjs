@@ -52,21 +52,34 @@ export async function decryptAesGcm(token, password) {
   if (token.startsWith(AES_TAG)) {
     const parsed = parseVersion2Token(token);
     raw = parsed.raw;
-    plaintextBytes = await subtle.decrypt(
-      { name: 'AES-GCM', iv: raw.slice(17, 29), additionalData: encoder.encode(`CT2:${parsed.keyBits}`) },
-      await deriveAesKey(password, raw.slice(1, 17), parsed.keyBits),
-      raw.slice(29)
-    );
+    try {
+      plaintextBytes = await subtle.decrypt(
+        { name: 'AES-GCM', iv: raw.slice(17, 29), additionalData: encoder.encode(`CT2:${parsed.keyBits}`) },
+        await deriveAesKey(password, raw.slice(1, 17), parsed.keyBits),
+        raw.slice(29)
+      );
+    } catch {
+      throw new Error('auth');
+    }
   } else {
     raw = decodeToken(token, LEGACY_AES_TAG, 28 + MAX_AES_CIPHERTEXT_BYTES);
     if (raw.length < 44) throw new Error('format');
-    plaintextBytes = await subtle.decrypt(
-      { name: 'AES-GCM', iv: raw.slice(16, 28), additionalData: LEGACY_AES_AAD },
-      await deriveAesKey(password, raw.slice(0, 16), 256),
-      raw.slice(28)
-    );
+    try {
+      plaintextBytes = await subtle.decrypt(
+        { name: 'AES-GCM', iv: raw.slice(16, 28), additionalData: LEGACY_AES_AAD },
+        await deriveAesKey(password, raw.slice(0, 16), 256),
+        raw.slice(28)
+      );
+    } catch {
+      throw new Error('auth');
+    }
   }
-  const plaintext = decoder.decode(plaintextBytes);
+  let plaintext;
+  try {
+    plaintext = decoder.decode(plaintextBytes);
+  } catch {
+    throw new Error('auth');
+  }
   assertMessageSize(plaintext);
   return plaintext;
 }

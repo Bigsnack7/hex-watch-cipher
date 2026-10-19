@@ -36,6 +36,7 @@ The app creates encrypted output for the user to transfer through a separate cha
 - [Features](#features)
 - [Encryption methods](#encryption-methods)
 - [Text encryption details](#text-encryption-details)
+- [AES-GCM key-size support](#aes-gcm-key-size-support)
 - [RSA keys and fingerprints](#rsa-keys-and-fingerprints)
 - [Digital signatures for encrypted messages](#digital-signatures-for-encrypted-messages)
 - [File encryption](#file-encryption)
@@ -60,8 +61,8 @@ The app creates encrypted output for the user to transfer through a separate cha
 ### Text protection and key management
 
 - Encrypt and decrypt text with password-based AES-GCM, authenticated AES-CBC compatibility mode, RSA-OAEP hybrid encryption, direct RSA for short messages, or the RSA-first dual-key envelope.
-- Generate 16–64-character passphrases with the browser's cryptographic random-number generator. Generated values are checked against the same meter and returned only when that heuristic scores them 100. The meter gives a score and actionable suggestions based on selected length, character variety, repeated patterns/runs, and common sequences. It is only a rough estimate, not a password audit: character groups are not a requirement, and it cannot detect breached, reused, or personal passphrases. Generated values are not stored and must be saved securely by the user.
-- Choose 128-, 192-, or 256-bit derived AES-GCM keys. New tokens record the selected key size; older `CT1.` AES-256-GCM tokens remain supported.
+- Generate 16-, 20-, 24-, 32-, 40-, or 64-character passphrases with the browser's cryptographic random-number generator. Generated values are checked against the same meter and returned only when that heuristic scores them 100. The meter gives a score and actionable suggestions based on selected length, character variety, repeated patterns/runs, and common sequences. It is only a rough estimate, not a password audit: character groups are not a requirement, and it cannot detect breached, reused, or personal passphrases. Generated values are not stored and must be saved securely by the user.
+- Choose 128-, 192-, or 256-bit derived AES-GCM keys when supported by the browser's Web Crypto implementation. The app checks AES-192 support and disables that option if unavailable; decryption of existing AES-192 tokens may require a different browser. New tokens record the selected key size; older `CT1.` AES-256-GCM tokens remain supported.
 - Generate 2048-, 3072-, or 4096-bit RSA-OAEP key pairs, import and export supported RSA PEM keys, and compare SHA-256 fingerprints of public keys.
 - Optionally sign encrypted message tokens with ECDSA P-256 / SHA-256, and verify signatures independently or automatically before decryption. Signing checks the newly produced signature against the displayed public key before releasing the signed token, so a mismatched private/public pair cannot produce a misleading result. Narration reports signature, key-generation, and verification outcomes without reading key material aloud.
 - Keep generated RSA private keys non-extractable in page memory by default, or explicitly choose exportable PEM when a user-managed backup is required.
@@ -102,7 +103,7 @@ The menu presents one option for each distinct construction; it no longer has du
 
 ### Passphrase generator and strength estimate
 
-Select a required access-key length from 16 to 64 characters (24 by default). This setting applies to both generated and manually entered access keys used for new AES-GCM, CBC-HMAC, RSA3, and file encryption. The app blocks those operations unless the key has exactly the selected number of Unicode code points. Decryption is not constrained by the current selection. RSA-only message encryption and legacy Grumpy v2 compatibility are not governed by this setting.
+Select one of the supported access-key lengths: **16, 20, 24, 32, 40, or 64 Unicode code points** (24 by default). This setting applies to both generated and manually entered access keys used for new AES-GCM, CBC-HMAC, RSA3, and file encryption. The app blocks those operations unless the key has exactly the selected number of Unicode code points and is no more than 4,096 UTF-8 bytes. Decryption is not constrained by the current selection. RSA-only message encryption and legacy Grumpy v2 compatibility are not governed by this setting.
 
 Select **Generate secure passphrase** to create a value with the required length. The app uses the browser's cryptographic random-number generator and rejection sampling, and guarantees lowercase, uppercase, numeric, and symbol characters. Generation requires Web Crypto in a secure context such as HTTPS or `localhost`. The generated passphrase fills the access-key field but is not saved, copied, or recoverable; store it securely before relying on it.
 
@@ -110,9 +111,15 @@ The access-key guidance checklist reports selected-length, lowercase, uppercase,
 
 ### AES-GCM
 
-The AES-GCM selector offers **128, 192, and 256 bits**; 256 bits is the default and recommended option. These values describe the derived AES key, **not** the number of passphrase characters. The app normalizes passphrases with Unicode NFKC and derives the selected AES key using PBKDF2-HMAC-SHA-256 with 600,000 iterations and a fresh random 16-byte salt. Each message also gets a fresh random 12-byte IV.
+The AES-GCM selector offers **128, 192, and 256 bits** when supported by the browser; 256 bits is the default and recommended option. These values describe the derived AES key, **not** the number of passphrase characters. The app normalizes passphrases with Unicode NFKC and derives the selected AES key using PBKDF2-HMAC-SHA-256 with 600,000 iterations and a fresh random 16-byte salt. Each message also gets a fresh random 12-byte IV.
 
-New messages use the `CT2.` token format. The token records the selected key size, and the format and key size are authenticated as additional data. Decryption reads the size from the token automatically. Older `CT1.` AES-256-GCM tokens remain decryptable. Web Crypto authenticates the ciphertext before any plaintext is returned.
+New messages use the `CT2.` token format. The token records the selected key size, and the format tag and key size are included as additional authenticated data (AAD), so decryption authenticates that metadata along with the ciphertext. The key size selects the derived key. Decryption reads the size from the token automatically. Older `CT1.` AES-256-GCM tokens remain decryptable. Web Crypto authenticates the ciphertext before any plaintext is returned.
+
+### AES-GCM key-size support
+
+Before enabling AES-192, the app asks the browser's Web Crypto API to generate a non-extractable AES-GCM key of that size. If Web Crypto reports the algorithm as unsupported, AES-192 stays disabled and the nearby hint explains why; AES-128 and AES-256 remain available. If support cannot be confirmed, the app fails closed and leaves AES-192 disabled.
+
+Web Crypto support is browser-dependent. Chromium tested with this project rejects AES-192-GCM key generation with an `OperationError`, so the UI disables the option there rather than allowing encryption to fail later with a misleading authentication error. Other browser versions may differ. New `CT2.` tokens record their AES key size; if a browser does not support the recorded size, decrypt that token in a browser that does. Node.js test support does not guarantee support in a target browser.
 
 ### AES-CBC with HMAC
 
@@ -142,7 +149,7 @@ Limits are measured in UTF-8 **bytes**, not characters — multi-byte characters
 
 ### Legacy Grumpy v2
 
-Grumpy v2 encryption and decryption are exposed for old-format compatibility and testing. Its weak key-derived stream, deterministic output, unchanged characters, and lack of authentication mean it does not provide reliable confidentiality or tamper detection; a wrong key or altered ciphertext may produce plausible-looking incorrect output without an error. Use it only to read or reproduce legacy data or for testing; do not use it to protect new or sensitive information. After decrypting an old message, use the migration action to move the plaintext into the message field and re-encrypt it with AES-GCM and a new passphrase.
+Grumpy v2 encryption and decryption are exposed for old-format compatibility and testing. Selecting it displays a confirmation that must be accepted before the mode activates. Its weak key-derived stream, deterministic output, unchanged characters, and lack of authentication mean it does not provide reliable confidentiality or tamper detection; a wrong key or altered ciphertext may produce plausible-looking incorrect output without an error. Use it only to read or reproduce legacy data or for testing; do not use it to protect new or sensitive information. After decrypting an old message, use the migration action to move the plaintext into the message field and re-encrypt it with AES-GCM and a new passphrase.
 
 ## RSA keys and fingerprints
 
@@ -160,15 +167,15 @@ RSA encryption does not authenticate the sender, prove a public key's identity b
 
 ## Digital signatures for encrypted messages
 
-Enable **Sign encrypted output** to wrap a newly encrypted message token in a `SIG1.` envelope signed with ECDSA P-256 and SHA-256. The signature covers the exact inner encrypted token with a versioned application-specific context; it does not sign plaintext, alter the underlying encryption format, or apply to files or Grumpy v2. Signed envelopes can wrap `CT2.`, `CT1.`, `CBC1.`, `RSA1.`, `RSA2.`, and `RSA3.` text tokens. Older unsigned tokens and all existing encryption formats remain unchanged.
+Enable **Sign encrypted output** to wrap a newly encrypted message token in a `SIG1.` envelope signed with ECDSA P-256 and SHA-256. The signature covers only the ciphertext token—the exact serialized encrypted token and its format data—with a versioned application-specific context; it does not cover plaintext, alter the underlying encryption format, or apply to files or Grumpy v2. Signed envelopes can wrap `CT2.`, `CT1.`, `CBC1.`, `RSA1.`, `RSA2.`, and `RSA3.` text tokens. Older unsigned tokens and all existing encryption formats remain unchanged.
 
 To sign, generate an ECDSA P-256 key pair or paste a PKCS#8 private signing key. Generated private keys are non-extractable and kept only in page memory by default; they are cleared when the workspace locks or the page closes. Choose **Exportable PEM** before generating if you need a user-managed backup. The private key is then visible in the page and must be stored securely. The export setting applies when generating the next key; it does not make an existing non-extractable key exportable. A lost non-extractable signing key cannot be recovered.
 
-Before signing, provide the matching SPKI public key. The app creates the signature and then verifies it against the public key currently displayed. If verification fails because the private key does not match, the operation stops: the signed token is not placed in the output and its download is disabled. This protects against accidentally pairing a private key with a different displayed public key.
+Before releasing a newly signed token, the app verifies the signature against the SPKI public key currently displayed. If verification fails because the private key does not match, the operation stops: the signed token is not placed in the output and its download is disabled.
 
 To verify, paste the signer's SPKI public key, enter the `SIG1.` message, and either choose **Verify signature only** or decrypt it. Signature-only verification confirms the signature without decrypting the payload. Decryption verifies the signature before processing the inner token. Successful verification reports the signer's SHA-256 public-key fingerprint; successful signed decryption reports both verification and decryption. A malformed public key, invalid signature, and a valid signature whose inner ciphertext cannot be decrypted have separate status and narration. In the last case, the app confirms the signature but does not expose plaintext.
 
-**A valid signature proves that the matching private key signed this exact encrypted token; it does not identify the person who controls that key.** Compare the full public-key fingerprint with the claimed sender through a separate trusted channel. A signature is not a replacement for encryption, and an unsigned message does not authenticate its sender. Narration can describe key-generation, signing, verification, mismatch, and failure outcomes but never reads the key contents aloud. Back up and distribute keys securely. Signatures do not prevent replay, key theft, or denial of service.
+**A valid signature proves that the matching private key signed this exact encrypted token; it does not identify the person who controls that key.** Compare the full public-key fingerprint with the claimed sender through a separate trusted channel. A signature is not a replacement for encryption, and an unsigned message does not authenticate its sender. Signatures provide no replay protection: a valid signed token can be resent. Narration can describe key-generation, signing, verification, mismatch, and failure outcomes but never reads the key contents aloud. Back up and distribute keys securely. Signatures do not prevent key theft or denial of service.
 
 ## File encryption
 
@@ -180,9 +187,9 @@ File operations always use the **Access key** and chunked AES-256-GCM, regardles
 - Files from the earlier `HWF1.` format remain decryptable up to **1 MiB** of plaintext.
 - Original filenames and MIME types are not stored. The default download names are `encrypted-file.hwf2` and `decrypted-file.bin`.
 - Progress is reported during chunked operations. Where supported, files of 64 MiB or larger are saved incrementally using the browser's Save File picker. Other browsers prepare a Blob download and may require substantial memory.
-- New file encryption requires the access key to contain exactly the selected number of Unicode characters (16–64). Decryption does not enforce the current selected length, so existing files remain usable with their original key. Use a long, unique passphrase — a length check or strength estimate is not a security guarantee.
+- New file encryption requires the access key to contain exactly the selected number of Unicode code points: 16, 20, 24, 32, 40, or 64. Decryption does not enforce the current selected length, so existing files remain usable with their original key. Use a long, unique passphrase — a length check or strength estimate is not a security guarantee.
 
-If streamed output fails, the app attempts to abort the incomplete save. Browser or filesystem behavior can still leave a partial file if aborting fails. Treat decrypted downloads as sensitive.
+For Save File picker operations, output is written to a fresh transactional stream (`keepExistingData: false`) and committed only after all chunks authenticate and the stream closes successfully. If decryption or writing fails, the app aborts the stream; it does not report a partial file as saved. If the browser or filesystem rejects the abort, the UI explicitly warns that output could not be discarded and instructs the user to remove any partial file rather than use it. In browsers without the picker, chunks remain in memory and the download is created only after the complete operation succeeds. Treat decrypted output as sensitive.
 
 ## File hash calculator
 
@@ -197,7 +204,7 @@ The file hash calculator is a separate integrity-checking tool; **hashing does n
 
 A matching digest is useful only when the expected digest comes from a source you trust. If an attacker can replace both a file and its published digest, comparing them does not establish authenticity. These hashes are unkeyed: they do not prove who created a file, and they do not replace a digital signature or a message authentication code.
 
-The calculator works through the browser's File API and Web Crypto API for SHA-1/SHA-256/SHA-512; its MD5 implementation is included for compatibility. All selected algorithms share a single in-memory read per file instead of rereading the file once for every algorithm. Files are processed one at a time and progress is reported for the batch. The Web Crypto digest API requires the whole file in memory; large files can still require substantial memory and may fail depending on browser and device limits. Hashing and file encryption are independent: the hash calculator does not change, encrypt, upload, or download the selected files.
+The calculator uses the File API and Web Crypto API for SHA-1/SHA-256/SHA-512; its MD5 implementation is included for compatibility and processes file chunks incrementally. Hashing runs in a same-origin Web Worker so CPU-heavy digest work does not block the page interface. MD5-only calculations read file slices incrementally without loading the complete file; when a SHA digest is also selected, MD5 consumes chunks from the buffer already needed by Web Crypto. Web Crypto SHA digests require the complete file in memory, so hashing is limited to 256 MiB per file to reduce browser memory pressure for those algorithms. This ceiling is separate from the 1 GiB file-encryption limit. Hashing and file encryption are independent: the hash calculator does not change, encrypt, upload, or download the selected files.
 
 To calculate a file's digest without comparing it, leave **Expected digest** blank and read or copy the digest shown in the results. Each digest has a **Copy** control. For a file you created, save the digest separately as a baseline and compare it with a later calculation to detect changes. To verify a published digest, choose its algorithm and paste the complete hexadecimal value into **Expected digest**. The calculator validates its character set and exact digest length before calculating, then displays **Match** or **Mismatch** for each selected file. The expected algorithm is calculated even if its checkbox is cleared. Editing the digest or algorithm recalculates the selected files; clearing the workspace or locking it removes the entered expected digest. A match only confirms equality with the supplied value—it cannot establish that the value itself came from an authentic source.
 
@@ -247,7 +254,7 @@ For short messages where only the recipient private key is needed, **RSA-OAEP ·
 
 1. Open the app in a modern browser from `localhost` or an HTTPS origin.
 2. Select an encryption method.
-3. For AES-GCM, optionally choose 128, 192, or 256 bits — this sets the derived AES key size, not passphrase length. For AES-CBC + HMAC, use a long passphrase. For an RSA method, paste and verify a recipient public-key fingerprint, or generate a key pair (choose the generated RSA key size before generating). RSA3 dual-key encryption also requires a shared access-key passphrase.
+3. For AES-GCM, choose an enabled 128-, 192-, or 256-bit option — this sets the derived AES key size, not passphrase length. AES-192 is enabled only when the browser's Web Crypto API confirms support. For AES-CBC + HMAC, use a long passphrase. For an RSA method, paste and verify a recipient public-key fingerprint, or generate a key pair (choose the generated RSA key size before generating). RSA3 dual-key encryption also requires a shared access-key passphrase.
 4. Enter the message and select **Encrypt message**. The result is a token with a method-specific prefix. Share the encrypted token and the required passphrase or key instructions through appropriate, separate channels.
 5. To decrypt, paste the complete token and provide the matching passphrase or private key. The app recognizes `CT2.`, older `CT1.`, `CBC1.`, `RSA1.`, `RSA2.`, and `RSA3.` text tokens and selects the corresponding method automatically. `RSA3.` decryption requires both the passphrase and the matching RSA private key.
 6. Use the file controls to encrypt or decrypt a file with the access key — file operations always use AES-256-GCM.
@@ -269,7 +276,7 @@ Use **Clear** when you want to remove the current message, result, selected encr
 
 ## Browser support and accessibility
 
-Use a modern browser with the Web Crypto API. Browsers generally expose cryptographic APIs only in a secure context, such as `localhost` or HTTPS; direct `file://` use may not work. Speech synthesis and the File System Access save picker are optional browser features. If the save picker is unavailable, downloads use a browser-generated Blob and may need substantial memory for large files. Hashing uses the browser's file-reading APIs; the SHA digest algorithms also require Web Crypto.
+Use a modern browser with the Web Crypto API. Browsers generally expose cryptographic APIs only in a secure context, such as `localhost` or HTTPS; direct `file://` use may not work. AES-192-GCM is not implemented by every browser's Web Crypto API: startup capability detection disables the choice where unsupported or when support cannot be confirmed. Existing tokens that require AES-192 must be decrypted in a compatible browser. Speech synthesis and the File System Access save picker are optional browser features. If the save picker is unavailable, downloads use a browser-generated Blob and may need substantial memory for large files. Hashing uses the browser's file-reading APIs; the SHA digest algorithms also require Web Crypto.
 
 The responsive interface uses the logo's violet and near-black palette, with a two-column desktop workspace that collapses for smaller screens. Controls have visible keyboard focus, labels, and status messages. Operation, file, output, fingerprint, and lock updates are exposed through live status regions. The app supports `Ctrl`/`⌘` + `Enter` to encrypt and `Ctrl`/`⌘` + `Shift` + `Enter` to decrypt. Narration is a separate convenience feature and does not replace screen-reader support or the visible status messages.
 
@@ -283,11 +290,12 @@ The responsive interface uses the logo's violet and near-black palette, with a t
 | New password-based encryption access key | Exactly the selected 16, 20, 24, 32, 40, or 64 Unicode code points; at most 4,096 UTF-8 bytes |
 | RSA or ECDSA PEM key input | 20,000 characters |
 | New file plaintext | 1 GiB |
+| File hashing | 256 MiB per file; SHA digests require full-file memory, MD5 is incremental; calculation runs in a Web Worker |
 | Earlier HWF1 file plaintext | 1 MiB |
 
 Direct RSA has an additional key-dependent plaintext limit, described above. The application uses fixed token formats, algorithms, and KDF work factors — token data cannot choose an arbitrary algorithm or PBKDF2 iteration count.
 
-Inputs are validated before cryptographic processing where practical. User-facing failures do not expose arbitrary cryptographic implementation details. Text and file failures are announced through narration only when narration is enabled; the visible status remains available regardless. Web Crypto operations such as PBKDF2 cannot always be cancelled once started, although the workspace lock invalidates pending UI operations and clears sensitive data.
+Inputs are validated before cryptographic processing where practical. Authenticated decryption failures use one generic message for text and a separate generic message for files, so wrong keys, malformed authenticated content, and tampering are not distinguished in user-facing messages. Actionable conditions such as unavailable Web Crypto, size limits, invalid signatures, and file read/write failures retain their own messages; a file write failure is never described as a key failure. Text and file failures are announced through narration only when narration is enabled; the visible status remains available regardless. Web Crypto operations such as PBKDF2 cannot always be cancelled once started, although the workspace lock invalidates pending UI operations and clears sensitive data.
 
 ## Privacy and workspace lock
 
@@ -317,13 +325,13 @@ The project has no `package.json`, runtime package installation, bundler, build 
 
 The app can be deployed as static files. Upload `index.html` at the site root together with the `css/`, `js/`, and `assets/` directories. Do not upload a nested project folder in a way that places the page one directory below the site root. Serve the site over HTTPS from an origin you trust.
 
-For Cloudflare Pages with Git integration, use the repository root as the root directory, select **None** as the framework preset, use `exit 0` as the build command, and set the build output directory to `.`. The project has no compile step; this setting publishes the root `index.html` and its `css/`, `js/`, and `assets/` dependencies. Do not use `docs/` as the build output directory.
+For Cloudflare Pages with Git integration, use the repository root as the root directory, select **None** as the framework preset, use `exit 0` as the build command, and set the build output directory to `.`. The project has no compile step; this setting publishes the root `index.html`, `_headers`, and its `css/`, `js/`, and `assets/` dependencies. Do not use `docs/` as the build output directory. Deploy the exact reviewed commit to production and verify the Pages deployment identifies that commit before promotion.
 
 For dashboard **Direct Upload**, create a Direct Upload project and upload the application files with `index.html` at the top level. Include `css/`, `js/`, and `assets/`; do not upload only a nested project directory or only the documentation folder. A Direct Upload project cannot later be converted to Git integration, so choose Git integration if automatic deployments from repository pushes are required. Manual uploads must be repeated after local files change.
 
 After deployment, test the published HTTPS site and inspect the browser console and Network panel for missing files or CSP errors. Treat deployed files as public; never put secrets or private keys in the site. See Cloudflare's [Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/) and [Direct Upload guide](https://developers.cloudflare.com/pages/get-started/direct-upload/) for current platform details.
 
-The page includes a restrictive CSP meta policy. Some protections, especially `frame-ancestors`, must be delivered as HTTP response headers; see [Recommended HTTP security headers](#recommended-http-security-headers).
+The page includes a restrictive CSP meta policy. The root [`_headers`](../_headers) file configures the corresponding Cloudflare Pages response headers, including `frame-ancestors 'none'`, which meta CSP cannot enforce. For Direct Upload, include `_headers` at the uploaded site's root. If deploying through Pages Functions or a Worker, configure the headers in that runtime instead. After deployment, inspect the actual HTML response headers and confirm they match `_headers`. Keep assets same-origin; if external assets are introduced, reassess CSP and use Subresource Integrity where supported.
 
 ## Tests
 
@@ -335,17 +343,17 @@ node --test
 
 Run this from the repository root. Node.js automatically discovers the test files, so the command works across Windows, macOS, and Linux without shell-specific path separators or wildcard expansion.
 
-The suite covers AES-GCM key sizes and legacy tokens, CBC-HMAC, direct RSA, standard AES-GCM + RSA-OAEP hybrid encryption, RSA-first dual-key encryption, RSA and ECDSA key generation/import/validation, signed-token creation and verification, passphrase generation and estimation, file-hash comparison and CSV export, Grumpy v2 compatibility, HWF1/HWF2 file encryption, tampering and malformed inputs, safe error behavior, local-processing policies, UI wiring, narration, and workspace locking. Passing tests establish expected behavior for tested cases; they are not a substitute for browser testing or an independent cryptographic audit.
+The suite covers AES-GCM key sizes and browser capability detection, legacy tokens, CBC-HMAC, direct RSA, standard AES-GCM + RSA-OAEP hybrid encryption, RSA-first dual-key encryption, RSA and ECDSA key generation/import/validation, signed-token creation and verification, passphrase generation and estimation, file-hash comparison and CSV export, Grumpy v2 compatibility, HWF1/HWF2 file encryption, tampering and malformed inputs, safe error behavior, local-processing policies, UI wiring, narration, and workspace locking. File-format tests include truncated ciphertext, swapped authenticated chunks, and a modified HWF2 header length. Passing tests establish expected behavior for tested cases; they are not a substitute for browser testing or an independent cryptographic audit.
 
 ### Browser smoke-test checklist
 
 Use a current browser on `localhost` or HTTPS. Keep any sample keys and passphrases temporary and do not use production secrets for testing.
 
-1. Encrypt and decrypt an empty message and a Unicode message with AES-GCM (`CT2.`) and CBC-HMAC (`CBC1.`). Confirm each token decrypts with the correct passphrase and that a wrong passphrase, modified token, and malformed token fail without displaying plaintext.
+1. Check the AES-GCM key-size selector after startup. In a browser that does not support AES-192-GCM, confirm the option is disabled with an explanatory hint; in a compatible browser, confirm it becomes selectable. In either case, test AES-128 and AES-256 message encryption/decryption, then encrypt/decrypt an empty message and a Unicode message with AES-GCM (`CT2.`) and CBC-HMAC (`CBC1.`). Confirm each token decrypts with the correct passphrase and that a wrong passphrase, modified token, and malformed token fail without displaying plaintext.
 2. Generate an RSA key pair and confirm the displayed SHA-256 fingerprint. For exportable keys, export and re-import the public/private PEM pair and confirm the fingerprint is unchanged. Test RSA1 hybrid, RSA2 direct, and RSA3 dual-key round trips. Confirm RSA2 and RSA3 enforce the selected key's short-message byte limit, and that RSA3 fails with a wrong passphrase or mismatched private key.
-3. Encrypt and decrypt empty, small, and multi-chunk files. Compare the original and recovered bytes; also try a wrong passphrase and a modified or truncated encrypted file.
+3. Encrypt and decrypt empty, small, and multi-chunk files. Compare the original and recovered bytes; also try a wrong passphrase and a modified or truncated encrypted file. For a large file saved through the Save File picker, tamper with a later encrypted chunk after earlier chunks have authenticated; confirm the operation fails, no success result is reported, and the uncommitted output is aborted. If cleanup itself fails, confirm the UI explicitly says not to use the partial file and to remove it. Without the picker, confirm a failed operation does not trigger a download.
 4. Generate passphrases at several lengths, confirm they populate the access-key box and the rough strength estimate updates, and check that repeated or short inputs are not described as strong. The generated value must not appear in browser storage.
-5. Hash a small known file with SHA-256 and SHA-512. Enter the correct expected digest and confirm **Match**, then change one digit and confirm **Mismatch**. Also check invalid digest length/characters, and confirm the expected algorithm is calculated even when its checkbox is cleared. Prefer trusted expected digests and SHA-256 or SHA-512.
+5. Hash a small known file with MD5, SHA-256, and SHA-512 and compare with known reference digests. Enter the correct expected digest and confirm **Match**, then change one digit and confirm **Mismatch**. Also check invalid digest length/characters, and confirm the expected algorithm is calculated even when its checkbox is cleared. Prefer trusted expected digests and SHA-256 or SHA-512. If practical, hash a file near the 256 MiB limit with MD5 only and confirm progress remains responsive; do not expect SHA hashing to stream because Web Crypto requires the complete file buffer.
 6. Generate an exportable ECDSA P-256 key pair for a deliberate signing-key backup, sign an encrypted sample message, and confirm it produces a `SIG1.` token. Verify it with the public key, change the token or use another public key and confirm verification fails, then decrypt the valid signed token and confirm signature verification happens before decryption. Compare the complete public-key fingerprint through a separate trusted channel. Substitute a different valid P-256 public key and confirm signing is refused, the error explains the mismatch, no signed result is output, and download remains disabled. Also try malformed public-key PEM for both verify-only and signed decryption, plus a valid signature with an incorrect decryption key; confirm each produces a distinct, accurate status.
 7. Select Grumpy v2 only to check legacy compatibility; if testing encryption, confirm the output can be decrypted with the same key and that the UI warns the result is unsafe. Confirm the migration action moves successfully decrypted text back to the message field so it can be protected with AES-GCM.
 8. Start a password-based, RSA, or ECDSA operation and verify relevant inputs and actions remain disabled while it is pending and become available afterward. Confirm editing the message or key, changing the method or key size, or changing RSA/ECDSA key material clears the previous output and disables its download action. Trigger the privacy lock during work, if practical, and confirm stale results are not restored when the workspace resumes.
@@ -354,7 +362,10 @@ Use a current browser on `localhost` or HTTPS. Keep any sample keys and passphra
 ### Troubleshooting
 
 - **Web Crypto is unavailable:** open the app from `localhost` or an HTTPS origin in a supported browser.
+- **AES-192 is disabled:** this browser's Web Crypto API rejected or could not confirm AES-192-GCM support. Use AES-128 or AES-256 for new messages, or open an existing AES-192 token in a browser that supports that key size. AES-192 encryption is covered by Node tests, but that does not establish browser support.
 - **A password-based operation rejects the key:** check that it is the same passphrase used for encryption, and that it meets the minimum and maximum limits. For authenticated formats, a wrong key and a modified token both cause decryption to fail.
+- **Authenticated decryption fails:** AES-GCM, CBC-HMAC, RSA, and HWF1/HWF2 file authentication failures use the same internal `auth` error code. User-facing failures are generic and contextual (message versus file); they do not say whether the key was wrong or authenticated data was altered. Malformed format and actionable size-limit errors remain distinct internally but are not exposed as key-oracle details in the UI. Grumpy v2 is unauthenticated and cannot reliably detect an incorrect key.
+- **File decryption reports a save/write failure:** this is an output I/O problem, not evidence of an incorrect key. Check available disk space and permissions, choose another save location if available, and retry. Cancelling the save picker is reported separately.
 - **RSA decryption fails:** confirm that the token format matches the operation and that the private key belongs to the public key used for encryption. Compare public-key fingerprints out of band before encrypting.
 - **Narration is silent:** check that narration is on, browser speech is allowed, and a speech voice is available. Playback failures switch narration off and show a status message.
 - **Large-file saving uses substantial memory:** this can occur in browsers without the Save File picker; use a browser that supports incremental file saving where available.
@@ -368,9 +379,12 @@ css/
   styles.css                   Responsive violet enterprise theme, focus and status styling
 js/
   app.js                       UI wiring, operations, downloads, and lock integration
+  aes-gcm-support.mjs           Runtime AES-GCM key-size capability detection
   crypto.mjs                   Crypto API re-exports
   errors.mjs                   User-facing errors and safe diagnostics
   passphrase.mjs               Passphrase generation and strength estimate
+  hashing.mjs                  Worker-safe MD5 and Web Crypto digest implementation, plus hash-size limit
+  hash-worker.mjs              Off-main-thread file reading and digest calculation
   hash-results.mjs             Hash CSV serialization and spreadsheet-safety handling
   hash-verification.mjs        Expected-digest validation and comparison
   session-lock.mjs             Testable inactivity timer
@@ -390,6 +404,7 @@ assets/
   hex-watch.svg                SVG logo and favicon
   hex-watch-project.png        PNG app icon
 tests/
+  aes-gcm-support.test.mjs     Web Crypto key-size capability detection
   audio-guide.test.mjs         Narration behavior and language guides
   crypto.test.mjs              AES, RSA, file, and legacy crypto tests
   ecdsa-signature.test.mjs     Signed-token and ECDSA key tests
@@ -421,7 +436,7 @@ Hex Watch Cipher can protect encrypted text and file contents from someone who h
 - **Passphrase guessing** — PBKDF2 makes guesses more expensive but cannot rescue a weak or reused passphrase. Meeting the selected length and passing the strength checklist is not a strength guarantee.
 - **Metadata** — Token prefixes, formats, and approximate message or file sizes remain visible.
 - **Hash limitations** — MD5 and SHA-1 are provided only for compatibility and are collision-broken. For security-sensitive file comparisons, use SHA-256 or SHA-512 and obtain the expected digest through a trusted channel.
-- **Identity and signatures** — Unsigned password and RSA encryption do not establish who created a message. Optional ECDSA P-256 signatures authenticate possession of a signing key for a specific encrypted token, but do not identify its owner unless its fingerprint is verified through a trusted channel. Signatures do not prevent replay or key theft.
+- **Identity and signatures** — Unsigned password and RSA encryption do not establish who created a message. Optional ECDSA P-256 signatures authenticate possession of a signing key for a specific encrypted token, but do not identify its owner unless its fingerprint is verified through a trusted channel. Signatures provide no replay protection and do not prevent key theft.
 - **Forward secrecy** — The app does not provide forward secrecy, key rotation, automatic key archival, or key recovery.
 - **Key loss** — A lost passphrase or non-extractable private key can make data unrecoverable. Exportable private-key backups require secure, user-managed storage.
 - **Privacy lock** — The lock reduces casual exposure but is not authentication and does not securely erase browser memory.
@@ -436,7 +451,7 @@ Serve the app over HTTPS from a trusted origin. The page includes a CSP meta pol
 Example response headers:
 
 ```text
-Content-Security-Policy: default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self'; font-src 'self'; media-src 'none'; connect-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'
+Content-Security-Policy: default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self'; font-src 'self'; media-src 'none'; connect-src 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'
 X-Content-Type-Options: nosniff
 Referrer-Policy: no-referrer
 X-Frame-Options: DENY
@@ -444,7 +459,7 @@ X-Frame-Options: DENY
 
 Keep scripts, styles, images, and fonts same-origin. Review the privacy and CSP impact before adding inline code, remote dependencies, or third-party assets. After deployment, inspect the actual response headers and Network panel in your browser. Initial same-origin asset requests are expected; encrypt/decrypt operations themselves should not initiate network requests.
 
-For Cloudflare Pages, response headers can be configured in a plain-text `_headers` file at the uploaded site's root. If deploying through Pages Functions or a Worker, configure headers in that runtime instead. Verify the published HTML response contains the intended headers.
+For Cloudflare Pages, the repository includes a plain-text [`_headers`](../_headers) file at the uploaded site's root. If deploying through Pages Functions or a Worker, configure headers in that runtime instead. Verify the published HTML response contains the intended headers and that its deployment corresponds to the reviewed commit.
 
 ## Author
 
