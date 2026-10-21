@@ -7,9 +7,9 @@ export const NARRATION_GUIDES = Object.freeze({
     'To read a protected message, paste the complete encrypted result into the message box, enter the same access key, and choose Decrypt message. Older CT1 messages are also supported. File encryption has its own controls and always uses AES-GCM.'
   ]),
   cbc: Object.freeze([
-    'This older encryption option is for working with systems that specifically need it. It scrambles the message and adds a separate check to spot changes. For a new message, AES-GCM is the simpler recommended choice.',
+    'This compatibility encryption option uses AES-CBC and a separate check to detect changes. New tokens use CBC2, and older CBC1 tokens can still be opened. For new messages, AES-GCM is the simpler recommended choice.',
     'To protect a message, enter a long access key that you do not use anywhere else, type your message, and choose Encrypt message. Send the encrypted result and the access key separately. Anyone who gets both can read the message.',
-    'To read a protected message, paste the complete CBC1 result into the message box, enter the same access key, and choose Decrypt message. A wrong key or changed result will be rejected. File encryption always uses AES-GCM.'
+    'To read a protected message, paste the complete CBC2 or CBC1 result into the message box, enter the same access key, and choose Decrypt message. A wrong key or changed result will be rejected. File encryption always uses AES-GCM.'
   ]),
   hybrid: Object.freeze([
     'This is the recommended way to send a message to someone without sharing an access key. The app scrambles the message with a new one-time key, then protects that key using the recipient’s public key.',
@@ -109,6 +109,7 @@ const PASSPHRASE_STRENGTH_NARRATION = Object.freeze({
     add: 'Add',
     remove: 'Remove',
     meetLength: 'to meet the selected length.',
+    optionalLength: 'This is the passphrase generator target, not a requirement.',
     lengthMet: 'The selected length is met.',
     unique: 'The selected length is met. Use a unique passphrase; this estimate cannot detect reuse or personal information.',
     disclaimer: 'This is a rough estimate, not a password audit.'
@@ -124,6 +125,7 @@ const PASSPHRASE_STRENGTH_NARRATION = Object.freeze({
     add: 'Fi',
     remove: 'Yọ',
     meetLength: 'kún láti bá gígùn tí a yàn mu.',
+    optionalLength: 'Èyí ni gígùn tí ohun èlò dídá ọ̀rọ̀ aṣínà fẹ́ lò; kì í ṣe ohun tí a nílò.',
     lengthMet: 'Gígùn tí a yàn bá mu.',
     unique: 'Gígùn tí a yàn bá mu. Lo ọ̀rọ̀ aṣínà aláìlẹ́gbẹ́; ìṣírò yìí kò lè mọ̀ bóyá a tún lò ó tàbí bóyá ó ní ìsọfúnni ara ẹni.',
     disclaimer: 'Ìṣírò yìí jẹ́ ìfojúsùn lasán, kì í ṣe àyẹ̀wò ọ̀rọ̀ aṣínà.'
@@ -139,6 +141,7 @@ const PASSPHRASE_STRENGTH_NARRATION = Object.freeze({
     add: 'Tinye',
     remove: 'Wepụ',
     meetLength: 'ka i kwekọọ n’ogologo a họọrọ.',
+    optionalLength: 'Nke a bụ ogologo ngwa imepụta paswọọdụ chọrọ, ọ bụghị ihe achọrọ.',
     lengthMet: 'Ogologo a họọrọ zuru oke.',
     unique: 'Ogologo a họọrọ zuru oke. Jiri paswọọdụ pụrụ iche; ntụle a agaghị amata ma ejirila ya ọzọ ma ọ bụ ma o nwere ozi nkeonwe.',
     disclaimer: 'Nke a bụ naanị atụmatụ, ọ bụghị nyocha paswọọdụ.'
@@ -154,6 +157,7 @@ const PASSPHRASE_STRENGTH_NARRATION = Object.freeze({
     add: 'Ƙara',
     remove: 'Cire',
     meetLength: 'don cika tsawon da aka zaɓa.',
+    optionalLength: 'Wannan tsawon da aka zaɓa na jagorar ƙirƙirar kalmar sirri ne, ba tilas ba ne.',
     lengthMet: 'An cika tsawon da aka zaɓa.',
     unique: 'An cika tsawon da aka zaɓa. Yi amfani da kalmar sirri ta musamman; wannan ƙiyasin ba zai iya gano sake amfani ko bayanan mutum ba.',
     disclaimer: 'Wannan ƙiyasin ne kawai, ba cikakken binciken kalmar sirri ba.'
@@ -169,6 +173,7 @@ const PASSPHRASE_STRENGTH_NARRATION = Object.freeze({
     add: 'Add',
     remove: 'Remove',
     meetLength: 'to meet di selected length.',
+    optionalLength: 'Na di length wey passphrase generator go use; e no be requirement.',
     lengthMet: 'Di selected length don correct.',
     unique: 'Di selected length don correct. Use unique passphrase; dis estimate no fit know if you don use am before or if e get personal information.',
     disclaimer: 'Na rough estimate, no be password audit.'
@@ -184,6 +189,7 @@ const PASSPHRASE_STRENGTH_NARRATION = Object.freeze({
     add: 'Añade',
     remove: 'Quita',
     meetLength: 'para alcanzar la longitud seleccionada.',
+    optionalLength: 'Esta es la longitud objetivo del generador, no un requisito.',
     lengthMet: 'La longitud seleccionada está completa.',
     unique: 'La longitud seleccionada está completa. Usa una frase única; esta estimación no detecta reutilización ni datos personales.',
     disclaimer: 'Es una estimación aproximada, no una auditoría de contraseñas.'
@@ -199,6 +205,7 @@ const PASSPHRASE_STRENGTH_NARRATION = Object.freeze({
     add: 'Ajoutez',
     remove: 'Retirez',
     meetLength: 'pour atteindre la longueur choisie.',
+    optionalLength: 'Il s’agit de la longueur cible du générateur, pas d’une exigence.',
     lengthMet: 'La longueur choisie est atteinte.',
     unique: 'La longueur choisie est atteinte. Utilisez une phrase unique ; cette estimation ne détecte pas la réutilisation ni les informations personnelles.',
     disclaimer: 'Il s’agit d’une estimation, pas d’un audit de mot de passe.'
@@ -1111,9 +1118,11 @@ export function createAudioController({ isLocked }) {
   }
 
   function getPassphraseStrengthResult({
-    generated = false, includeLength = true, keyId = 'key', lengthId = 'passphraseLength'
+    generated = false, includeLength = true,
+    keyId = 'key', lengthId = 'passphraseLength',
+    enforceLength = keyId !== 'stegoAccessKey'
   } = {}) {
-    const value = $(keyId).value.trim();
+    const value = keyId === 'stegoAccessKey' ? $(keyId).value : $(keyId).value.trim();
     const target = Number($(lengthId).value);
     const strings = PASSPHRASE_STRENGTH_NARRATION[narrationLanguage]
       || PASSPHRASE_STRENGTH_NARRATION.en;
@@ -1121,24 +1130,26 @@ export function createAudioController({ isLocked }) {
     if (!estimate) return null;
 
     const actual = countPassphraseCharacters(value);
-    let lengthGuidance = strings.unique;
-    if (actual < target) {
+    let lengthGuidance = enforceLength ? strings.unique : strings.optionalLength;
+    if (enforceLength && actual < target) {
       const difference = target - actual;
       lengthGuidance = `${strings.add} ${difference} ${strings.characters} ${strings.meetLength}`;
-    } else if (actual > target) {
+    } else if (enforceLength && actual > target) {
       const difference = actual - target;
       lengthGuidance = `${strings.remove} ${difference} ${strings.characters} ${strings.meetLength}`;
-    } else if (narrationLanguage === 'en' && estimate.guidance.startsWith('For a higher estimate')) {
+    } else if (enforceLength && narrationLanguage === 'en' && estimate.guidance.startsWith('For a higher estimate')) {
       lengthGuidance = strings.lengthMet;
     }
     const grade = strings[estimate.level];
-    const detail = narrationLanguage === 'en' &&
+    const detail = enforceLength && narrationLanguage === 'en' &&
       actual === target &&
       estimate.guidance.startsWith('For a higher estimate')
       ? `${estimate.guidance} `
       : '';
     const lengthSummary = includeLength
-      ? `${actual} of ${target} ${strings.characters}. ${lengthGuidance} `
+      ? enforceLength
+        ? `${actual} of ${target} ${strings.characters}. ${lengthGuidance} `
+        : `${actual} ${strings.characters}. ${lengthGuidance} `
       : '';
     return `${generated ? `${strings.generated} ` : ''}${strings.estimate}: ${grade}, ${estimate.score} out of 100. ${lengthSummary}${detail}${strings.disclaimer}`;
   }
@@ -1159,13 +1170,16 @@ export function createAudioController({ isLocked }) {
     const id = element.tagName === 'LABEL' ? element.htmlFor : element.id;
     const isWithin = selector => typeof element.matches === 'function' &&
       (element.matches(selector) || Boolean(element.closest?.(selector)));
+    if (element.tagName === 'SUMMARY' && isWithin('.stego-key-advanced')) {
+      return 'Advanced key options. Expand this section to hear the passphrase generator and key-strength estimate.';
+    }
     const stegoControlGuidance = {
-      stegoModeHide: 'Embed mode. Choose a carrier and one payload source, then encrypt and embed it. Images use PNG pixel embedding; other files have an encrypted block appended.',
+      stegoModeHide: 'Embed mode. Choose a carrier and one payload source, then encrypt and embed it. PNG and JPEG images use pixel embedding; PDFs receive a standard encrypted attachment; other files have an encrypted block appended.',
       stegoModeExtract: 'Extract mode. Choose the unchanged output carrier and the same access key used to embed the payload.',
-      stegoDropzone: 'Carrier picker. Choose one PNG or JPEG image, video, recording, or other file. PNG and JPEG use pixel embedding; JPEG output becomes PNG. Other files use appended data, which is not concealed.',
-      stegoCarrier: 'Choose one carrier file. PNG and JPEG images use pixel embedding; other files have encrypted payload data appended.',
-      stegoCapacityBar: 'Carrier capacity indicator. Image capacity is estimated from opaque pixels; other files can have up to four mebibytes appended. Check the carrier warning because appended data is not concealed.',
-      stegoCapacityValue: 'Estimated capacity for the selected carrier. Image capacity depends on opaque pixels; other files use appended data.',
+      stegoDropzone: 'Carrier picker. Choose one PNG or JPEG image, video, audio recording, PDF, document, or other file. PNG and JPEG use pixel embedding; JPEG output becomes PNG. PDFs receive an encrypted attachment and remain PDFs; other files have data appended, which is not concealed.',
+      stegoCarrier: 'Choose one carrier file, including a PDF or document. PNG and JPEG images use pixel embedding; PDFs receive an encrypted attachment; other files have encrypted payload data appended.',
+      stegoCapacityBar: 'Carrier capacity indicator. Image capacity is estimated from opaque pixels; PDFs and other files support payloads up to four mebibytes. Other files have data appended, which is not concealed.',
+      stegoCapacityValue: 'Estimated capacity for the selected carrier. Image capacity depends on opaque pixels; PDFs use an attachment; other files use appended data.',
       stegoPayloadSection: 'Payload source. Choose either a text message or files, not both. One file keeps its format; multiple files or a folder are bundled into a ZIP.',
       stegoText: 'Text payload. Enter the message to encrypt and embed. Choose either text or files, not both. The maximum plaintext payload is four mebibytes.',
       stegoFilePicker: 'File payload picker. Add one file, multiple files, or a folder. A single file keeps its format; collections and folders are bundled into a ZIP.',
@@ -1174,7 +1188,7 @@ export function createAudioController({ isLocked }) {
       stegoClearFiles: 'Clear the selected payload files and folder.',
       stegoHide: 'Encrypt and embed the selected payload with the chosen workspace access key.',
       stegoExtract: 'Extract and decrypt the payload from the selected unchanged carrier using the same workspace access key.',
-      stegoKeySetup: 'Separate workspace access-key settings. This key is independent of the main Access key and must be kept to extract payloads.',
+      stegoKeySetup: 'Workspace access-key settings. This key is always used in the media and file payload workspace, independently of the main Access key. Keep it to extract payloads.',
       stegoStatus: $('stegoStatus').textContent,
       stegoCarrierStatus: $('stegoCarrierStatus').textContent,
       stegoPayloadStatus: $('stegoPayloadStatus').textContent,
@@ -1186,16 +1200,16 @@ export function createAudioController({ isLocked }) {
       return 'Payloads are encrypted with authenticated AES-256-GCM before embedding. The selected workspace access key is required to recover them.';
     }
     if (isWithin('.stego-capacity-card')) {
-      return 'Carrier capacity. Image capacity depends on opaque pixels; other carriers have encrypted payload data appended, which is not concealed and may affect compatibility.';
+      return 'Carrier capacity. Image capacity depends on opaque pixels; PDFs use standard embedded attachments; other non-PDF files have encrypted data appended, which is not concealed and may affect compatibility.';
     }
     if (isWithin('.stego-format-card')) {
-      return 'Supported workflow. PNG uses pixel embedding; JPEG input becomes PNG; other files use appended data. A single payload file keeps its format, while folders and multiple files recover as a ZIP.';
+      return 'Supported workflow. PNG uses pixel embedding; JPEG input becomes PNG; PDFs keep their format with an encrypted attachment; other files use appended data. A single payload file keeps its format, while folders and multiple files recover as a ZIP.';
     }
     if (isWithin('.stego-warning')) {
       return element.textContent.trim();
     }
     if (isWithin('.stego-picker-copy')) {
-      return 'Select one carrier. PNG and JPEG images use pixel embedding; JPEG becomes PNG. Other files have encrypted payload data appended, which is not concealed.';
+      return 'Select one carrier, including a PDF or document. PNG and JPEG images use pixel embedding; JPEG becomes PNG. PDFs receive a standard encrypted attachment; other files have encrypted payload data appended, which is not concealed.';
     }
     if (isWithin('.stego-drop-hint')) {
       return 'Drop files into the payload picker, or use Choose folder to preserve a folder structure.';
@@ -1229,7 +1243,11 @@ export function createAudioController({ isLocked }) {
         id === 'stegoKeyStrengthMeter' || id === 'stegoKeyStrengthStatus' || id === 'stegoKeyStrengthGuidance') {
       const separateKey = id.startsWith('stego');
       return getPassphraseStrengthResult(separateKey
-        ?{keyId:'stegoAccessKey',lengthId:'stegoPassphraseLength'}
+        ?{
+          keyId:'stegoAccessKey',
+          lengthId:'stegoPassphraseLength',
+          includeLength:true
+        }
         :undefined) || getControlNarration(id, narrationLanguage);
     }
     const controlNarration = getControlNarration(id, narrationLanguage);
@@ -1310,10 +1328,9 @@ export function createAudioController({ isLocked }) {
       hashOutput: 'File check results. Each code helps compare a file with a copy you trust. Compare the whole code, not just the beginning.',
       passphraseLength: 'Generated passphrase length. Choose between 16 and 64 characters. Longer randomly generated passphrases are harder to guess; 24 characters is the recommended default.',
       generatePassphrase: 'Generate secure passphrase button. It uses browser cryptographic randomness to create a mixed-character access key and puts it in the access-key box. It is not saved for you, so store it securely before relying on it.',
-      stegoSeparateKey: 'Use a separate access key for the media and file payload workspace. When enabled, this key is independent of the main Access key and must be kept to recover payloads.',
-      stegoAccessKey: 'Separate media and file payload access key. Keep it securely and use the same key to recover the payload.',
-      stegoAccessKeyEye: 'Show or hide the separate media and file payload access key.',
-      stegoPassphraseLength: 'Required access-key length for new media and file payload encryption. Choose between 16 and 64 characters; 24 is recommended.',
+      stegoAccessKey: 'Media and file payload workspace access key. This key is always used in this workspace, not the main Access key. Keep it securely and use the same key to recover the payload.',
+      stegoAccessKeyEye: 'Show or hide the media and file payload workspace access key.',
+      stegoPassphraseLength: 'Passphrase length for the media and file payload key generator. This only determines the length of generated passphrases.',
       stegoGeneratePassphrase: 'Generate secure passphrase button for the media and file payload workspace. It uses browser cryptographic randomness. Store the generated key securely; it is not saved for you.',
       keyStrengthMeter: 'Access-key quality meter. It gives a rough estimate based on length, character variety, repetition, and common sequences. It is not a password audit and cannot detect reused passphrases or personal information.',
       keyStrengthStatus: 'Access-key quality estimate. The score is a rough guide, not a password audit. Suggestions can flag selected length, character variety, repeated runs, and predictable sequences. Character groups are not a password requirement; prefer a long, unique, securely generated passphrase.',
@@ -1351,7 +1368,7 @@ export function createAudioController({ isLocked }) {
     if (id === 'fileHint') return guides.fileInput;
     if (id === 'hashDropzone' || id === 'hashInput' || id === 'hashSelected' || id === 'hashOutput' ||
         id === 'exportHashResults' || id === 'hashProgress' ||
-        id === 'passphraseLength' || id === 'generatePassphrase' || id === 'stegoSeparateKey' ||
+        id === 'passphraseLength' || id === 'generatePassphrase' ||
         id === 'stegoAccessKey' || id === 'stegoAccessKeyEye' || id === 'stegoPassphraseLength' ||
         id === 'stegoGeneratePassphrase' || id === 'expectedHashAlgorithm' || id === 'expectedHash' ||
         id === 'expectedHashHint' || id === 'signMessage' || id === 'signingKeyMode' ||
@@ -1439,25 +1456,54 @@ export function createAudioController({ isLocked }) {
     return true;
   }
 
+  function announceStegoKeyOptions(open) {
+    const messages = {
+      en: open
+        ? 'Advanced key options expanded. Choose a passphrase generator length and review the strength estimate.'
+        : 'Advanced key options collapsed. The workspace key field remains available.',
+      yo: open
+        ? 'Àwọn àṣàyàn kọ́kọ́rọ́ tó ti ní ìlọsíwájú ti ṣí. Yan gígùn fún ohun èlò dídá ọ̀rọ̀ aṣínà, o lè béèrè fún gígùn kan náà, kí o sì wo ìṣírò agbára.'
+        : 'Àwọn àṣàyàn kọ́kọ́rọ́ tó ti ní ìlọsíwájú ti pa. Apótí kọ́kọ́rọ́ workspace ṣì wà.',
+      ig: open
+        ? 'Nhọrọ igodo dị elu emeghela. Họrọ ogologo maka ngwa imepụta paswọọdụ, họrọ ma ị chọrọ ịmanye otu ogologo ahụ, ma lelee atụmatụ ike igodo.'
+        : 'Emechiela nhọrọ igodo dị elu. Igbe igodo workspace ka dị.',
+      ha: open
+        ? 'An buɗe saitunan maɓalli na ci gaba. Zaɓi tsawon kalmar sirri, zaɓi ko za a tilasta wannan tsawon, sannan a duba ƙiyasin ƙarfin maɓalli.'
+        : 'An rufe saitunan maɓalli na ci gaba. Akwatin maɓallin workspace yana nan.',
+      pcm: open
+        ? 'Advanced key options don open. Choose generator length and check key-strength estimate.'
+        : 'Advanced key options don close. Workspace key box still dey.',
+      es: open
+        ? 'Se abrieron las opciones avanzadas de la clave. Elige la longitud del generador y consulta la estimación de seguridad.'
+        : 'Se cerraron las opciones avanzadas. El campo de clave del espacio de trabajo sigue disponible.',
+      fr: open
+        ? 'Les options avancées de la clé sont ouvertes. Choisissez la longueur du générateur et consultez l’estimation de robustesse.'
+        : 'Les options avancées sont fermées. Le champ de clé de l’espace de travail reste disponible.'
+    };
+    announceMessage(messages[narrationLanguage] || messages.en);
+    return true;
+  }
+
   function announceStegoStatus(status, detail = '') {
     const messages = {
       carrierRemoved: 'The carrier selection was cleared.',
       carrierAppendReady: 'Carrier inspected. Up to four mebibytes can be appended as encrypted data; it is not concealed and may affect compatibility.',
+      pdfCarrierReady: 'PDF inspected. The encrypted payload will be stored as a standard attachment inside the PDF, which remains a PDF. Attachment display depends on the viewer.',
       carrierInvalid: 'The selected carrier could not be inspected. Choose a supported image or a file within the carrier size limit.',
       jpegExtractUnavailable: 'JPEG is accepted as a source image for hiding, but extraction requires the PNG output created by this tool.',
       embedMode: 'Embed mode selected. Choose a carrier, one payload source, and an access key.',
       extractMode: 'Extract mode selected. Choose the unchanged output carrier and the same access key used to embed the payload.',
-      separateKeyEnabled: 'Separate workspace access key enabled. Enter or generate that key, and keep it to recover the payload.',
-      sharedKeyEnabled: 'Separate workspace key disabled. The main Access key is selected for this workspace.',
       carrierRequired: 'Choose one carrier file before continuing.',
-      keyRequired: 'Enter the access key selected for this workspace.',
-      keyTooShort: 'The access key must contain at least 10 characters to extract a payload.',
-      keyLength: 'The access key does not match the required length for new payload encryption.',
+      keyRequired: 'Enter the workspace access key to continue. The main Access key is not used here.',
+      keyTooShort: detail
+        ?`The workspace key has ${detail} At least 10 characters are required to extract a payload.`
+        :'The workspace access key must contain at least 10 characters to extract a payload.',
       folderRequired: 'Use the folder picker to add a folder and preserve its structure.',
       tooManyPayloadFiles: 'A payload collection can contain no more than 1,000 files.',
       oneCarrierRequired: 'Choose one carrier file at a time.',
       operationFailed: 'The payload operation could not be completed. Review the message in the workspace and try again.',
       embedded: 'The payload was encrypted and embedded in the image. Keep the output unchanged and retain the access key.',
+      pdfAttached: 'The encrypted payload was attached inside the PDF. The PDF remains valid and its pages are preserved. Keep the output unchanged and retain the access key.',
       appended: 'The payload was encrypted and appended to a copy of the carrier. Appended data is not concealed and may affect compatibility.',
       extracted: 'The payload was authenticated, decrypted, and downloaded. Keep the access key secure.'
     };
@@ -1521,11 +1567,16 @@ export function createAudioController({ isLocked }) {
     return true;
   }
 
-  function announcePassphraseLength(length, {keyId = 'key', lengthId = 'passphraseLength'} = {}) {
+  function announcePassphraseLength(length, {
+    keyId = 'key', lengthId = 'passphraseLength',
+    enforceLength = keyId !== 'stegoAccessKey'
+  } = {}) {
     if (![16, 20, 24, 32, 40, 64].includes(length)) return false;
     const guidance=getContextualGuide($(lengthId))||
       'Generated passphrase length. Choose between 16 and 64 characters. Longer random passphrases are harder to guess; 24 characters is the recommended default.';
-    const strengthResult = getPassphraseStrengthResult({ includeLength: false, keyId, lengthId });
+    const strengthResult = getPassphraseStrengthResult({
+      includeLength: keyId === 'stegoAccessKey', enforceLength, keyId, lengthId
+    });
     announceMessage(`${guidance} Selected length: ${length} characters.${strengthResult ? ` ${strengthResult}` : ''}`);
     return true;
   }
@@ -1635,8 +1686,13 @@ export function createAudioController({ isLocked }) {
   });
   $('stegoPassphraseLength').addEventListener('change', () => {
     announcePassphraseLength(Number($('stegoPassphraseLength').value), {
-      keyId:'stegoAccessKey',lengthId:'stegoPassphraseLength'
+      keyId:'stegoAccessKey',
+      lengthId:'stegoPassphraseLength',
+      enforceLength:false
     });
+  });
+  document.querySelector?.('.stego-key-advanced')?.addEventListener('toggle', event => {
+    announceStegoKeyOptions(event.currentTarget.open);
   });
   $('expectedHashAlgorithm').addEventListener('change', announceExpectedHashAlgorithm);
   if (speech) window.speechSynthesis.onvoiceschanged = () => { voice = pickVoice(narrationLanguage); };
@@ -1656,6 +1712,7 @@ export function createAudioController({ isLocked }) {
     setNarrationLanguage,
     announceStatus,
     announceStegoStatus,
+    announceStegoKeyOptions,
     announceLanguageChanged,
     announceHashAlgorithm,
     announceHashDigestCopy,

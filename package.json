@@ -1,0 +1,8 @@
+{
+  "name": "hex-watch-cipher",
+  "private": true,
+  "description": "Static browser-based encryption and file integrity workspace",
+  "dependencies": {
+    "pdf-lib": "1.17.1"
+  }
+}

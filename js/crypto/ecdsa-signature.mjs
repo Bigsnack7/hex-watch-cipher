@@ -1,5 +1,5 @@
 import {
-  AES_TAG, LEGACY_AES_TAG, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG,
+  AES_TAG, LEGACY_AES_TAG, CBC_TAG, CBC_LEGACY_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG,
   b64, concat, decoder, encoder, requireCrypto, subtle, unb64url
 } from './shared.mjs';
 import { readPem, writePem } from './pem.mjs';
@@ -9,7 +9,7 @@ export const MAX_SIGNED_MESSAGE_CHARS = 200_000;
 const SIGNATURE_DOMAIN = encoder.encode('Hex Watch Cipher signed message v1');
 const SIGNATURE_BYTES = 64;
 const HEADER_BYTES = 5;
-const SUPPORTED_TOKEN_TAGS = [AES_TAG, LEGACY_AES_TAG, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG];
+const SUPPORTED_TOKEN_TAGS = [AES_TAG, LEGACY_AES_TAG, CBC_TAG, CBC_LEGACY_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG];
 
 function isEncryptedToken(token) {
   if (typeof token !== 'string') return false;

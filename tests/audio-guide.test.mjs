@@ -10,7 +10,7 @@ import {
 
 const expectedModes = {
   aes: ['recommended choice', 'encrypted result', 'same access key'],
-  cbc: ['older encryption option', 'CBC1', 'separate check'],
+  cbc: ['compatibility encryption option', 'CBC2', 'CBC1'],
   hybrid: ['recommended way to send', 'RSA1', 'private key'],
   'rsa-direct': ['short messages', 'RSA2', '190 bytes'],
   'rsa-aes': ['short messages', 'RSA3', 'both'],
@@ -188,14 +188,28 @@ test('clicked controls speak guidance for the currently selected method', async 
     assert.equal((utterances.at(-1).text.match(/Use a unique passphrase/g) || []).length, 0);
     assert.doesNotMatch(utterances.at(-1).text, new RegExp(generatedKey));
     change('stegoPassphraseLength', 32);
-    assert.match(utterances.at(-1).text, /Required access-key length for new media and file payload encryption/);
+    assert.match(utterances.at(-1).text, /Passphrase length for the media and file payload key generator/);
     assert.match(utterances.at(-1).text, /Selected length: 32 characters/);
+    assert.match(utterances.at(-1).text, /only determines the length of generated passphrases/);
     elements.get('stegoAccessKey').value = generatedKey;
     assert.equal(controller.announcePassphraseResult({
       generated: true, keyId: 'stegoAccessKey', lengthId: 'stegoPassphraseLength'
     }), true);
-    assert.match(utterances.at(-1).text, /32 of 32 characters/);
+    assert.match(utterances.at(-1).text, /32 characters\./);
+    assert.match(utterances.at(-1).text, /passphrase generator target, not a requirement/);
     assert.doesNotMatch(utterances.at(-1).text, new RegExp(generatedKey));
+    elements.get('stegoAccessKey').value = 'ShortKey123!';
+    assert.equal(controller.announcePassphraseResult({
+      keyId: 'stegoAccessKey',
+      lengthId: 'stegoPassphraseLength'
+    }), true);
+    assert.match(utterances.at(-1).text, /12 characters\./);
+    assert.match(utterances.at(-1).text, /passphrase generator target, not a requirement/);
+    assert.doesNotMatch(utterances.at(-1).text, /Add 12 characters to meet the selected length/);
+    assert.equal(controller.announceStegoKeyOptions(true), true);
+    assert.match(utterances.at(-1).text, /Advanced key options expanded/);
+    assert.equal(controller.announceStegoKeyOptions(false), true);
+    assert.match(utterances.at(-1).text, /Advanced key options collapsed/);
     click('keyStrengthStatus');
     assert.match(utterances.at(-1).text, /Access-key estimate: good, 75 out of 100/);
     assert.match(utterances.at(-1).text, /avoid repeating a character pattern/);
@@ -205,21 +219,23 @@ test('clicked controls speak guidance for the currently selected method', async 
     assert.match(utterances.at(-1).text, /Carrier capacity indicator/);
     click('stegoModeHide');
     assert.match(utterances.at(-1).text, /Embed mode/);
+    click('stegoDropzone');
+    assert.match(utterances.at(-1).text, /PDF, document/);
     assert.equal(controller.announceStegoStatus('embedded'), true);
     assert.match(utterances.at(-1).text, /encrypted and embedded in the image/);
     assert.doesNotMatch(utterances.at(-1).text, new RegExp(generatedKey));
     assert.equal(controller.announceStegoStatus('imageCarrierReady','PNG image selected. Estimated pixel payload capacity: 8 KB.'), true);
     assert.match(utterances.at(-1).text, /Estimated pixel payload capacity: 8 KB/);
-    assert.equal(controller.announceStegoStatus('separateKeyEnabled'), true);
-    assert.match(utterances.at(-1).text, /Separate workspace access key enabled/);
-    assert.equal(controller.announceStegoStatus('sharedKeyEnabled'), true);
-    assert.match(utterances.at(-1).text, /main Access key is selected/);
     assert.equal(controller.announceStegoStatus('extractMode'), true);
     assert.match(utterances.at(-1).text, /Extract mode selected/);
     assert.equal(controller.announceStegoStatus('carrierRemoved'), true);
     assert.match(utterances.at(-1).text, /carrier selection was cleared/);
     assert.equal(controller.announceStegoStatus('carrierAppendReady'), true);
     assert.match(utterances.at(-1).text, /four mebibytes can be appended/);
+    assert.equal(controller.announceStegoStatus('pdfCarrierReady'), true);
+    assert.match(utterances.at(-1).text, /standard attachment inside the PDF/);
+    assert.equal(controller.announceStegoStatus('pdfAttached'), true);
+    assert.match(utterances.at(-1).text, /attached inside the PDF/);
     assert.equal(controller.announceStegoStatus('carrierInvalid'), true);
     assert.match(utterances.at(-1).text, /carrier could not be inspected/);
     assert.equal(controller.announceStegoStatus('jpegExtractUnavailable'), true);
@@ -264,7 +280,7 @@ test('clicked controls speak guidance for the currently selected method', async 
     const modeSelect = elements.get('mode');
     change('mode', 'cbc');
     assert.match(utterances.at(-1).text, /^AES-CBC with HMAC, compatibility mode\./);
-    assert.match(utterances.at(-1).text, /older encryption option/);
+    assert.match(utterances.at(-1).text, /compatibility encryption option/);
 
     const rsaSizeSelect = elements.get('rsaKeySize');
     for (const [keyBits, limit, expected] of [
@@ -296,7 +312,7 @@ test('clicked controls speak guidance for the currently selected method', async 
 
     change('mode', 'cbc');
     assert.match(utterances.at(-1).text, /^AES-CBC with HMAC, compatibility mode\./);
-    assert.match(utterances.at(-1).text, /older encryption option/);
+    assert.match(utterances.at(-1).text, /compatibility encryption option/);
     change('mode', 'hybrid');
     assert.match(utterances.at(-1).text, /^AES-GCM with RSA-OAEP, hybrid\./);
     assert.match(utterances.at(-1).text, /new one-time key/);

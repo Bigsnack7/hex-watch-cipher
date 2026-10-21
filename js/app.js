@@ -1,5 +1,5 @@
 import {
-  AES_TAG, LEGACY_AES_TAG, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG, MAX_MESSAGE_BYTES,
+  AES_TAG, LEGACY_AES_TAG, CBC_TAG, CBC_LEGACY_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG, MAX_MESSAGE_BYTES,
   MAX_SIGNED_MESSAGE_CHARS, generateEcdsaKeyPair, fingerprintEcdsaPublicKey,
   signMessageToken, verifyMessageToken, isSignedMessageToken,
   encryptAesGcm, decryptAesGcm, encryptCbcHmac, decryptCbcHmac,
@@ -15,6 +15,9 @@ import {
   MAX_STEGO_DIMENSION, MAX_STEGO_PAYLOAD_BYTES, MAX_STEGO_EMBEDDED_BYTES,
   carrierDimensionsMatch, createAppendedPayloadFooter, extractAppendedPayload
 } from './steganography.mjs';
+import {
+  attachEncryptedPayloadToPdf, extractEncryptedPayloadFromPdf, MAX_STEGO_PDF_BYTES
+} from './pdf-attachments.mjs';
 import { buildZipArchive } from './stego-archive.mjs';
 import { createAudioController } from './ui/audio.mjs';
 import { createWorkspaceLock } from './ui/workspace-lock.mjs';
@@ -38,7 +41,7 @@ const inp=$('inp'),key=$('key'),out=$('out'),mode=$('mode'),status=$('status'),
   stegoClearFilesB=$('stegoClearFiles'),stegoFilePicker=$('stegoFilePicker'),
   stegoDropzone=$('stegoDropzone'),
   stegoModeHideB=$('stegoModeHide'),stegoModeExtractB=$('stegoModeExtract'),
-  stegoSeparateKey=$('stegoSeparateKey'),stegoAccessKey=$('stegoAccessKey'),
+  stegoAccessKey=$('stegoAccessKey'),
   stegoPassphraseLength=$('stegoPassphraseLength'),stegoGeneratePassphraseB=$('stegoGeneratePassphrase'),
   stegoKeyStrengthMeter=$('stegoKeyStrengthMeter'),stegoKeyStrengthStatus=$('stegoKeyStrengthStatus'),
   stegoKeyLengthStatus=$('stegoKeyLengthStatus'),
@@ -74,7 +77,7 @@ const operationControls=[
   $('generateEcdsa'),$('copyEcdsaPublic'),$('copyEcdsaPrivate'),$('verifySignature'),
   stegoCarrier,stegoText,stegoFiles,stegoFolder,stegoChooseFilesB,stegoChooseFolderB,
   stegoClearFilesB,stegoHideB,stegoExtractB,stegoModeHideB,stegoModeExtractB,
-  stegoSeparateKey,stegoAccessKey,stegoPassphraseLength,stegoGeneratePassphraseB,$('stegoAccessKeyEye')
+  stegoAccessKey,stegoPassphraseLength,stegoGeneratePassphraseB,$('stegoAccessKeyEye')
 ];
 /* ================= UI logic ================= */
 const EMPTY='Your result will appear here.';
@@ -120,12 +123,11 @@ function updateActionButtons(){
   const validPayload=estimateStegoPayload().valid;
   const validCarrier=Boolean(stegoCarrier.files.length&&stegoCarrierCapacity!==null);
   const stegoKey=getStegoKeySettings();
-  const validStegoKey=stegoMode==='hide'
-    ?countPassphraseCharacters(stegoKey.value)===stegoKey.requiredLength
-    :countPassphraseCharacters(stegoKey.value)>=10;
+  const stegoKeyLength=countPassphraseCharacters(stegoKey.value);
+  const validStegoKey=stegoKeyLength>=10;
   stegoHideB.disabled=unavailable||stegoMode!=='hide'||!validCarrier||!validPayload||!validStegoKey;
   stegoExtractB.disabled=unavailable||stegoMode!=='extract'||!validCarrier||!validStegoKey||
-    (stegoCarrierFormat!=='png'&&stegoCarrierFormat!=='file');
+    (stegoCarrierFormat!=='png'&&stegoCarrierFormat!=='file'&&stegoCarrierFormat!=='pdf');
   stegoModeHideB.disabled=unavailable;
   stegoModeExtractB.disabled=unavailable;
   downloadTokenB.disabled=locked||operationBusy||!lastEncryptedToken;
@@ -196,6 +198,7 @@ function invalidateMessageResult(){
 function clearLegacyMigration(){
   legacyMigrationText=null;
   $('legacyMigration').hidden=true;
+  $('migrateLegacy').hidden=false;
   $('migrationStatus').hidden=true;
   $('migrationStatus').textContent='';
 }
@@ -250,21 +253,16 @@ function updatePassphraseStrength(){
 }
 function updateStegoPassphraseStrength(){
   const target=Number(stegoPassphraseLength.value);
-  const accessKey=stegoAccessKey.value.trim();
+  const accessKey=stegoAccessKey.value;
   const actual=countPassphraseCharacters(accessKey);
-  const difference=target-actual;
   const estimate=estimatePassphraseStrength(accessKey,target);
-  $('stegoKeyCheck-length').querySelector('span:last-child').textContent=`Exactly ${target} characters`;
+  const lengthCheck=$('stegoKeyCheck-length');
+  lengthCheck.dataset.label='Generator target';
+  lengthCheck.querySelector('span:last-child').textContent=`Generator target: ${target} characters`;
   const checklist=estimate?.checks||{
     length:false,lowercase:false,uppercase:false,numbers:false,symbols:false
   };
-  stegoKeyLengthStatus.textContent=!stegoAccessKey.value
-    ?`Enter ${target} characters for new payload encryption.`
-    :difference===0
-      ?`${actual}/${target} characters — selected length met.`
-      :difference>0
-        ?`${actual}/${target} characters — enter ${difference} more.`
-        :`${actual}/${target} characters — remove ${Math.abs(difference)}.`;
+  stegoKeyLengthStatus.textContent=`${actual} key characters. Generator target: ${target}. Minimum: 10.`;
   for(const [check,passed] of Object.entries(checklist)){
     const item=$(`stegoKeyCheck-${check}`);
     item.classList.toggle('is-met',passed);
@@ -283,11 +281,9 @@ function updateStegoPassphraseStrength(){
   updateActionButtons();
 }
 function getStegoKeySettings(){
-  const isSeparate=stegoSeparateKey.checked;
   return {
-    value:(isSeparate?stegoAccessKey:key).value.trim(),
-    input:isSeparate?stegoAccessKey:key,
-    requiredLength:Number(isSeparate?stegoPassphraseLength.value:$('passphraseLength').value)
+    value:stegoAccessKey.value,
+    input:stegoAccessKey
   };
 }
 function accessKeyLengthError(value){
@@ -484,6 +480,7 @@ async function handleHashFileSelect(fileList,announce=true){
 }
 function refresh(){
   const selected=mode.value;
+  lastSelectedMode=selected;
   const hybridMode=selected==='hybrid'||selected==='rsa-direct'||selected==='rsa-aes';
   const aesKeyBits=Number($('aesKeySize').value);
   const rsaKeyBits=Number($('rsaKeySize').value);
@@ -556,7 +553,7 @@ async function run(dec){
   if(!raw.trim())return show(EMPTY);
   if(raw.length>MAX_SIGNED_MESSAGE_CHARS){show(MSG.toolarge,true);audio.announceStatus('operationFailed');return}
   let value=raw.trim();
-  const isToken=isSignedMessageToken(value)||value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)||value.startsWith(RSA_TAG)||value.startsWith(RSA_DIRECT_TAG)||value.startsWith(RSA_AES_TAG);
+  const isToken=isSignedMessageToken(value)||value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)||value.startsWith(CBC_LEGACY_TAG)||value.startsWith(RSA_TAG)||value.startsWith(RSA_DIRECT_TAG)||value.startsWith(RSA_AES_TAG);
   if((!dec||!isToken)&&new TextEncoder().encode(raw).length>MAX_MESSAGE_BYTES){
     show(MSG.toolarge,true);audio.announceStatus('operationFailed');return
   }
@@ -589,7 +586,7 @@ async function run(dec){
     if(dec){
       if(value.startsWith(RSA_AES_TAG))mode.value='rsa-aes';
       else if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG))mode.value='aes';
-      else if(value.startsWith(CBC_TAG))mode.value='cbc';
+      else if(value.startsWith(CBC_TAG)||value.startsWith(CBC_LEGACY_TAG))mode.value='cbc';
       else if(value.startsWith(RSA_TAG))mode.value='hybrid';
       else if(value.startsWith(RSA_DIRECT_TAG))mode.value='rsa-direct';
       refresh();
@@ -597,7 +594,7 @@ async function run(dec){
     const selected=mode.value;
     let r;
     if(dec){
-      if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)){
+      if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)||value.startsWith(CBC_LEGACY_TAG)){
         if(!pw){show('Enter your access key to continue.',1);key.focus();audio.announceStatus('operationFailed');return}
         r=value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)
           ?await decryptAesGcm(value,pw):await decryptCbcHmac(value,pw);
@@ -833,11 +830,11 @@ async function runFile(decrypting){
     audio.announceStatus(error.message==='fileio'?'fileOutputFailed':'fileFailed');
   }finally{busy(false)}
 }
-function setStegoStatus(message,isError=false,narrationEvent=''){
+function setStegoStatus(message,isError=false,narrationEvent='',narrationDetail=''){
   const status=$('stegoStatus');
   status.textContent=message;
   status.classList.toggle('error',isError);
-  if(narrationEvent)audio.announceStegoStatus(narrationEvent);
+  if(narrationEvent)audio.announceStegoStatus(narrationEvent,narrationDetail);
 }
 async function getStegoCarrier(file){
   if(!(file instanceof Blob)||file.size>MAX_STEGO_CARRIER_BYTES)throw new Error('carrierlimit');
@@ -845,6 +842,15 @@ async function getStegoCarrier(file){
   const pngSignature=[137,80,78,71,13,10,26,10];
   const isPng=header.length>=8&&pngSignature.every((byte,index)=>header[index]===byte);
   const isJpeg=header.length>=2&&header[0]===0xff&&header[1]===0xd8;
+  const pdfHeader=[0x25,0x50,0x44,0x46,0x2d];
+  const hasPdfHeader=header.subarray(0,1024).some((byte,index)=>
+    pdfHeader.every((value,offset)=>header[index+offset]===value)
+  );
+  const isPdf=hasPdfHeader||file.type==='application/pdf'||/\.pdf$/i.test(file.name);
+  if(isPdf){
+    if(file.size>MAX_STEGO_PDF_BYTES)throw new Error('pdflimit');
+    return {bitmap:null,format:'pdf'};
+  }
   if(!isPng&&!isJpeg)return {bitmap:null,format:'file'};
   if(file.size>MAX_STEGO_IMAGE_BYTES)throw new Error('image');
   const {width,height,format}=readCarrierDimensions(header);
@@ -875,6 +881,8 @@ function getStegoCarrierOutputName(name){
 function updateStegoExtractHint(format){
   $('stegoExtractHint').textContent=format==='file'
     ?'Select the unchanged carrier output created by this tool. Its encrypted payload is appended to the original file. Enter the same access key used to embed it.'
+    :format==='pdf'
+      ?'Select the unchanged PDF output created by this tool. Its encrypted payload is attached inside the PDF. Enter the same access key used to embed it.'
     :'Select the unchanged PNG output created by this tool. Enter the same access key used to embed the payload.';
 }
 async function updateStegoCapacity(){
@@ -883,7 +891,11 @@ async function updateStegoCapacity(){
   if(!carrier){
     stegoCarrierCapacity=null;
     stegoCarrierFormat=null;
-    $('stegoPickerName').textContent='Choose an image, video, recording, or file';
+    $('stegoDropzone').classList.remove('has-file');
+    $('stegoDropzone').setAttribute('aria-label','Choose or drop an image, video, audio recording, PDF, document, or other carrier file');
+    $('stegoPickerName').textContent='Choose an image, video, audio recording, PDF, document, or other file';
+    $('stegoPickerHint').textContent='PNG and JPEG images use pixels; PDFs keep their format with an encrypted attachment. Other files use appended data.';
+    $('stegoPickerAction').textContent='Browse files';
     $('stegoCarrierStatus').textContent='No carrier selected. Capacity is calculated after you choose a file.';
     $('stegoCapacityValue').textContent='—';
     $('stegoCapacityBar').value=0;
@@ -896,23 +908,43 @@ async function updateStegoCapacity(){
   stegoCarrierFormat=null;
   $('stegoCapacityValue').textContent='Checking…';
   $('stegoCapacityBar').value=0;
+  $('stegoDropzone').classList.add('has-file');
+  $('stegoDropzone').setAttribute('aria-label',`Change carrier file. Current file: ${carrier.name}`);
   $('stegoPickerName').textContent=carrier.name;
+  $('stegoPickerHint').textContent='Checking file type and carrier limits…';
+  $('stegoPickerAction').textContent='Change file';
   $('stegoCarrierStatus').textContent=`${carrier.name} · Checking carrier and capacity…`;
   $('stegoCarrierStatus').classList.remove('error');
   updateActionButtons();
   let bitmap=null,canvas=null,format='png';
   try{
     ({bitmap,format}=await getStegoCarrier(carrier));
+    if(format==='pdf'){
+      if(generation!==stegoSelectionGeneration||locked)return;
+      stegoCarrierCapacity=MAX_STEGO_EMBEDDED_BYTES;
+      stegoCarrierFormat=format;
+      updateStegoExtractHint(format);
+      $('stegoPickerHint').textContent='PDF carrier · Encrypted attachment';
+      $('stegoCapacityValue').textContent='Up to 4 MiB';
+      $('stegoCapacityBar').value=MAX_STEGO_PAYLOAD_BYTES;
+      $('stegoCarrierStatus').textContent=
+        `${carrier.name} · PDF ready. Pages stay intact; attachment visibility depends on the PDF viewer.`;
+      stegoHideB.textContent='Encrypt and attach payload';
+      audio.announceStegoStatus('pdfCarrierReady');
+      updateStegoPayloadSummary();
+      return;
+    }
     if(format==='file'){
       if(generation!==stegoSelectionGeneration||locked)return;
       stegoCarrierCapacity=MAX_STEGO_EMBEDDED_BYTES;
       stegoCarrierFormat=format;
       updateStegoExtractHint(format);
       const kind=getStegoCarrierKind(carrier);
+      $('stegoPickerHint').textContent=`${kind} carrier · Appended payload`;
       $('stegoCapacityValue').textContent='Up to 4 MiB';
       $('stegoCapacityBar').value=MAX_STEGO_PAYLOAD_BYTES;
       $('stegoCarrierStatus').textContent=
-        `${carrier.name} · ${kind} · encrypted payload will be appended, not concealed. Compatibility depends on the file format.`;
+        `${carrier.name} · ${kind} ready. Original stays unchanged; encrypted data will be appended.`;
       stegoHideB.textContent='Encrypt and append payload';
       audio.announceStegoStatus('carrierAppendReady');
       updateStegoPayloadSummary();
@@ -930,6 +962,9 @@ async function updateStegoCapacity(){
     stegoCarrierFormat=format;
     updateStegoExtractHint(format);
     $('stegoPickerName').textContent=carrier.name;
+    $('stegoPickerHint').textContent=format==='jpeg'
+      ?'JPEG image · Converted to PNG for pixel embedding.'
+      :'PNG image · Payload embedded in image pixels.';
     $('stegoCapacityValue').textContent=formatHashFileSize(capacity);
     $('stegoCapacityBar').value=Math.min(MAX_STEGO_PAYLOAD_BYTES,capacity);
     $('stegoCarrierStatus').textContent=`${carrier.name} · ${bitmap.width} × ${bitmap.height} · ${format.toUpperCase()}${format==='jpeg'?' source (converted to PNG on output)':''}`;
@@ -941,10 +976,13 @@ async function updateStegoCapacity(){
     $('stegoPickerName').textContent=carrier.name;
     $('stegoCapacityValue').textContent='Unavailable';
     $('stegoCapacityBar').value=0;
+    $('stegoPickerHint').textContent='Could not use this carrier. Choose another file and try again.';
     $('stegoCarrierStatus').textContent=error.message==='image'
       ?MSG.stegoimage
       :error.message==='carrierlimit'
         ?'Carrier files must be 1 GiB or smaller.'
+      :error.message==='pdflimit'
+        ?'PDF carriers must be 32 MiB or smaller because they are rewritten locally to add a standard PDF attachment.'
       :'Could not inspect this carrier file. Choose another file and try again.';
     stegoHideB.textContent='Encrypt and embed payload';
     $('stegoCarrierStatus').classList.add('error');
@@ -1117,19 +1155,17 @@ async function runStego(extracting){
   if(locked||operationBusy)return;
   const carrier=stegoCarrier.files[0],password=key.value;
   if(!carrier){setStegoStatus('Choose a carrier file to continue.',true,'carrierRequired');return}
-  const {value:stegoPassword,input:stegoPasswordInput,requiredLength}=getStegoKeySettings();
+  const {value:stegoPassword,input:stegoPasswordInput}=getStegoKeySettings();
   if(!stegoPassword){
     setStegoStatus('Enter your access key to continue.',true,'keyRequired');
     stegoPasswordInput.focus();
     return;
   }
   if(extracting&&countPassphraseCharacters(stegoPassword)<10){
-    setStegoStatus(MSG.short,true,'keyTooShort');
-    stegoPasswordInput.focus();
-    return;
-  }
-  if(!extracting&&countPassphraseCharacters(stegoPassword)!==requiredLength){
-    setStegoStatus(`New payload encryption requires exactly ${requiredLength} characters. Your access key has ${countPassphraseCharacters(stegoPassword)}.`,true,'keyLength');
+    setStegoStatus(
+      MSG.short,true,'keyTooShort',
+      `${countPassphraseCharacters(stegoPassword)} characters entered.`
+    );
     stegoPasswordInput.focus();
     return;
   }
@@ -1139,10 +1175,10 @@ async function runStego(extracting){
   try{
     if(!subtle)throw new Error('nocrypto');
     ({bitmap,format:carrierFormat}=await getStegoCarrier(carrier));
-    if(extracting&&carrierFormat!=='png'&&carrierFormat!=='file')throw new Error('stegoformat');
+    if(extracting&&carrierFormat!=='png'&&carrierFormat!=='file'&&carrierFormat!=='pdf')throw new Error('stegoformat');
     if(locked||generation!==operationGeneration)throw new Error('cancelled');
     let context=null,imageData=null;
-    if(carrierFormat!=='file'){
+    if(carrierFormat==='png'||carrierFormat==='jpeg'){
       canvas=document.createElement('canvas');
       canvas.width=bitmap.width;
       canvas.height=bitmap.height;
@@ -1170,7 +1206,9 @@ async function runStego(extracting){
     if(extracting){
       const encrypted=carrierFormat==='file'
         ?await extractAppendedPayload(carrier)
-        :extractPayload(imageData.data);
+        :carrierFormat==='pdf'
+          ?await extractEncryptedPayloadFromPdf(new Uint8Array(await carrier.arrayBuffer()))
+          :extractPayload(imageData.data);
       if(encrypted.length>MAX_STEGO_EMBEDDED_BYTES)throw new Error('stegoformat');
       await decryptFileStream(new Blob([encrypted]),stegoPassword,collect,reportProgress);
       const recovered=unwrapStegoPayload(combineStegoChunks(chunks,total,MAX_STEGO_PAYLOAD_BYTES+1026));
@@ -1185,7 +1223,7 @@ async function runStego(extracting){
       const wrapped=wrapStegoPayload(source.bytes,source.name);
       const chunkCount=Math.max(1,Math.ceil(wrapped.length/FILE_CHUNK_BYTES));
       const encryptedLength=FILE_HEADER_BYTES+wrapped.length+chunkCount*FILE_TAG_BYTES;
-      if(carrierFormat!=='file'&&encryptedLength>getStegoCapacity(imageData.data))throw new Error('capacity');
+      if((carrierFormat==='png'||carrierFormat==='jpeg')&&encryptedLength>getStegoCapacity(imageData.data))throw new Error('capacity');
       await encryptFileStream(new Blob([wrapped]),stegoPassword,collect,reportProgress);
       const encrypted=combineStegoChunks(chunks,total,MAX_STEGO_EMBEDDED_BYTES);
       if(carrierFormat==='file'){
@@ -1195,11 +1233,19 @@ async function runStego(extracting){
         const outputName=getStegoCarrierOutputName(carrier.name);
         triggerDownload(output,outputName);
         setStegoStatus(`Encrypted payload appended to ${outputName}. The original ${getStegoCarrierKind(carrier)} file was not changed. Appended data is not concealed and may affect compatibility.`,false,'appended');
+      }else if(carrierFormat==='pdf'){
+        const pdfBytes=new Uint8Array(await carrier.arrayBuffer());
+        const outputBytes=await attachEncryptedPayloadToPdf(pdfBytes,encrypted);
+        if(locked||generation!==operationGeneration)return;
+        const outputName=getStegoCarrierOutputName(carrier.name);
+        triggerDownload(new Blob([outputBytes],{type:'application/pdf'}),outputName);
+        setStegoStatus(`Encrypted payload attached inside ${outputName}. The PDF pages remain intact; attachments are not supported by every PDF viewer. The original PDF was not changed.`,false,'pdfAttached');
       }else{
         embedPayload(imageData.data,encrypted);
         context.putImageData(imageData,0,0);
         const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
-        if(!png||png.size>MAX_STEGO_IMAGE_BYTES)throw new Error('image');
+        if(!png)throw new Error('image');
+        if(png.size>MAX_STEGO_IMAGE_BYTES)throw new Error('stegooutputlarge');
         if(locked||generation!==operationGeneration)return;
         triggerDownload(png,'hidden-payload.png');
         setStegoStatus(`Encrypted ${source.name} hidden in hidden-payload.png.${carrierFormat==='jpeg'?' The JPEG carrier was converted to PNG.':''} The original image was not changed.`,false,'embedded');
@@ -1212,6 +1258,14 @@ async function runStego(extracting){
       capacity:MSG.stegocapacity,
       image:MSG.stegoimage,
       carrierlimit:'Carrier files must be 1 GiB or smaller.',
+      pdflimit:'PDF carriers must be 32 MiB or smaller because they are rewritten locally to add a standard PDF attachment.',
+      pdfencrypted:'This PDF is encrypted or password-protected. Remove its protection before using it as a carrier.',
+      pdfformat:'This PDF could not be read or rewritten safely. Check that it is a valid, unencrypted PDF.',
+      pdfattachment:'The PDF attachment is malformed or exceeds the supported payload size.',
+      pdfattachmentexists:'This PDF already contains a Hex Watch Cipher payload attachment. Extract it or choose another PDF before embedding.',
+      pdfunsupported:'This browser cannot safely read the compressed PDF attachment. Use a current browser with DecompressionStream support.',
+      pdfoutputlarge:'The rewritten PDF would exceed the 64 MiB output limit. Choose a smaller PDF carrier.',
+      stegooutputlarge:'The resulting PNG would be larger than 32 MiB and cannot be downloaded. Choose a smaller or more compressible carrier image.',
       stegoformat:extracting&&carrierFormat==='jpeg'
         ?'Extraction requires the PNG output created when the payload was hidden. JPEG is accepted only as a source image.'
         :MSG.stegoformat,
@@ -1231,8 +1285,6 @@ async function runStego(extracting){
 function clearStegoWorkspace(){
   stegoSelectionGeneration++;
   stegoCarrier.value='';
-  stegoSeparateKey.checked=false;
-  $('stegoKeySetup').hidden=true;
   stegoAccessKey.value='';
   stegoAccessKey.type='password';
   $('stegoAccessKeyEye').textContent='Show';
@@ -1244,7 +1296,11 @@ function clearStegoWorkspace(){
   stegoFiles.value='';
   stegoFolder.value='';
   stegoCarrierCapacity=null;
-  $('stegoPickerName').textContent='Choose an image, video, recording, or file';
+  $('stegoDropzone').classList.remove('has-file');
+  $('stegoDropzone').setAttribute('aria-label','Choose or drop an image, video, audio recording, PDF, document, or other carrier file');
+  $('stegoPickerName').textContent='Choose an image, video, audio recording, PDF, document, or other file';
+  $('stegoPickerHint').textContent='PNG and JPEG images use pixels; PDFs keep their format with an encrypted attachment. Other files use appended data.';
+  $('stegoPickerAction').textContent='Browse files';
   $('stegoCarrierStatus').textContent='No carrier selected. Capacity is calculated after you choose a file.';
   $('stegoCarrierStatus').classList.remove('error');
   $('stegoCapacityValue').textContent='—';
@@ -1543,28 +1599,20 @@ stegoHideB.addEventListener('click',()=>runStego(false));
 stegoExtractB.addEventListener('click',()=>runStego(true));
 stegoModeHideB.addEventListener('click',()=>setStegoMode('hide',true));
 stegoModeExtractB.addEventListener('click',()=>setStegoMode('extract',true));
-stegoSeparateKey.addEventListener('change',()=>{
-  $('stegoKeySetup').hidden=!stegoSeparateKey.checked;
-  if(!stegoSeparateKey.checked){
-    stegoAccessKey.value='';
-    stegoAccessKey.type='password';
-    $('stegoAccessKeyEye').textContent='Show';
-    $('stegoAccessKeyEye').title='Show media access key';
-    $('stegoAccessKeyEye').setAttribute('aria-label','Show media access key');
-    $('stegoAccessKeyEye').setAttribute('aria-pressed','false');
-  }
-  updateStegoPassphraseStrength();
-  setStegoStatus('');
-  audio.announceStegoStatus(stegoSeparateKey.checked?'separateKeyEnabled':'sharedKeyEnabled');
-});
 stegoAccessKey.addEventListener('input',updateStegoPassphraseStrength);
 stegoPassphraseLength.addEventListener('change',updateStegoPassphraseStrength);
+stegoAccessKey.addEventListener('blur',()=>audio.announcePassphraseResult({
+  keyId:'stegoAccessKey',
+  lengthId:'stegoPassphraseLength'
+}));
 stegoGeneratePassphraseB.addEventListener('click',()=>{
   try{
     stegoAccessKey.value=generatePassphrase(Number(stegoPassphraseLength.value));
     updateStegoPassphraseStrength();
     audio.announcePassphraseResult({
-      generated:true,keyId:'stegoAccessKey',lengthId:'stegoPassphraseLength'
+      generated:true,
+      keyId:'stegoAccessKey',
+      lengthId:'stegoPassphraseLength'
     });
     stegoAccessKey.focus();
   }catch(error){
@@ -1650,10 +1698,14 @@ for(const hashField of document.querySelectorAll('input[name="hashAlgorithm"]'))
     }
   });
 }
-hashDropzone.addEventListener('click',()=>hashInput.click());
+hashDropzone.addEventListener('click',event=>{
+  if(locked||operationBusy||event.target===hashInput)return;
+  hashInput.click();
+});
 hashDropzone.addEventListener('keydown',event=>{
   if(event.key==='Enter' || event.key===' '){
     event.preventDefault();
+    if(locked||operationBusy)return;
     hashInput.click();
   }
 });
@@ -1665,6 +1717,7 @@ hashDropzone.addEventListener('dragleave',()=>hashDropzone.classList.remove('dra
 hashDropzone.addEventListener('drop',event=>{
   event.preventDefault();
   hashDropzone.classList.remove('dragging');
+  if(locked||operationBusy)return;
   if(event.dataTransfer?.files?.length){
     const transfer=new DataTransfer();
     for(const file of event.dataTransfer.files){
@@ -1677,6 +1730,7 @@ hashDropzone.addEventListener('drop',event=>{
 stegoDropzone.addEventListener('keydown',event=>{
   if(event.key==='Enter'||event.key===' '){
     event.preventDefault();
+    if(locked||operationBusy)return;
     stegoCarrier.click();
   }
 });
@@ -1690,6 +1744,7 @@ stegoDropzone.addEventListener('dragleave',event=>{
 stegoDropzone.addEventListener('drop',event=>{
   event.preventDefault();
   stegoDropzone.classList.remove('dragging');
+  if(locked||operationBusy)return;
   const files=event.dataTransfer?.files;
   if(!files?.length)return;
   if(files.length!==1){
@@ -1708,6 +1763,7 @@ mode.addEventListener('change',()=>{
     );
     if(!accepted){
       mode.value=lastSelectedMode;
+      refresh();
       return;
     }
     legacyWarningAcknowledged=true;
@@ -1789,13 +1845,15 @@ inp.addEventListener('keydown',e=>{
 inp.addEventListener('input',invalidateMessageResult);
 $('migrateLegacy').addEventListener('click',()=>{
   if(typeof legacyMigrationText!=='string')return;
-  inp.value=legacyMigrationText;
-  legacyMigrationText=null;
-  $('migrateLegacy').hidden=true;
+  const migrated=legacyMigrationText;
   mode.value='aes';
   key.value='';
+  inp.value=migrated;
   invalidateMessageResult();
   refresh();
+  updatePassphraseStrength();
+  $('legacyMigration').hidden=false;
+  $('migrateLegacy').hidden=true;
   $('migrationStatus').textContent='Legacy plaintext is ready in the message field. Enter a new, strong access key, then select Encrypt message to protect it with AES-256-GCM.';
   $('migrationStatus').hidden=false;
   key.focus();

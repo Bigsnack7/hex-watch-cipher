@@ -6,7 +6,8 @@ export const subtle = globalThis.crypto?.subtle;
 
 export const AES_TAG = 'CT2.';
 export const LEGACY_AES_TAG = 'CT1.';
-export const CBC_TAG = 'CBC1.';
+export const CBC_TAG = 'CBC2.';
+export const CBC_LEGACY_TAG = 'CBC1.';
 export const RSA_TAG = 'RSA1.';
 export const RSA_DIRECT_TAG = 'RSA2.';
 export const RSA_AES_TAG = 'RSA3.';
