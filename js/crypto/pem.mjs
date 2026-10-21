@@ -24,5 +24,5 @@ export function writePem(data, label) {
     binary += String.fromCharCode(...bytes.subarray(i, i + 32_768));
   }
   const encoded = btoa(binary);
-  return `-----BEGIN ${label}-----\n${encoded.match(/.{1,64}/g).join('\n')}\n-----END ${label}-----`;
+  return `-----BEGIN ${label}-----\n${(encoded.match(/.{1,64}/g) ?? []).join('\n')}\n-----END ${label}-----`;
 }

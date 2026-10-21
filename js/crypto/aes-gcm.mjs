@@ -47,15 +47,19 @@ export async function encryptAesGcm(text, password, keyBits = 256) {
 
 export async function decryptAesGcm(token, password) {
   requireCrypto();
+  if (typeof token !== 'string') throw new Error('format');
   let raw;
   let plaintextBytes;
+  // The key is derived outside the try blocks so input errors such as 'keytoolarge' or 'short'
+  // are reported as themselves instead of being disguised as an authentication failure.
   if (token.startsWith(AES_TAG)) {
     const parsed = parseVersion2Token(token);
     raw = parsed.raw;
+    const key = await deriveAesKey(password, raw.slice(1, 17), parsed.keyBits);
     try {
       plaintextBytes = await subtle.decrypt(
         { name: 'AES-GCM', iv: raw.slice(17, 29), additionalData: encoder.encode(`CT2:${parsed.keyBits}`) },
-        await deriveAesKey(password, raw.slice(1, 17), parsed.keyBits),
+        key,
         raw.slice(29)
       );
     } catch {
@@ -64,10 +68,11 @@ export async function decryptAesGcm(token, password) {
   } else {
     raw = decodeToken(token, LEGACY_AES_TAG, 28 + MAX_AES_CIPHERTEXT_BYTES);
     if (raw.length < 44) throw new Error('format');
+    const key = await deriveAesKey(password, raw.slice(0, 16), 256);
     try {
       plaintextBytes = await subtle.decrypt(
         { name: 'AES-GCM', iv: raw.slice(16, 28), additionalData: LEGACY_AES_AAD },
-        await deriveAesKey(password, raw.slice(0, 16), 256),
+        key,
         raw.slice(28)
       );
     } catch {

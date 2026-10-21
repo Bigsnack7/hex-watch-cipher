@@ -18,6 +18,9 @@ function hash32(password) {
 function legacyStream(password) {
   let state = hash32(password) || 1;
   return () => {
+    // COMPATIBILITY: `>> 17` (arithmetic) differs from textbook xorshift32's `>>> 17`. Do NOT "fix"
+    // it: it is part of the Grumpy v2 format and changing it would make every existing
+    // ciphertext undecryptable (see tests/crypto.test.mjs, legacy vector).
     state ^= state << 13;
     state >>>= 0;
     state ^= state >> 17;
