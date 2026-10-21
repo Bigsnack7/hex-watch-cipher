@@ -41,7 +41,12 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(html, /up to 1 GiB/i);
   assert.match(html, /id="fileEncrypt"/);
   assert.match(html, /id="fileDecrypt"/);
-  assert.match(html, /id="stegoCarrier" class="stego-native-picker" type="file" aria-describedby="stegoCarrierStatus"/);
+  assert.match(html, /id="stegoCarrier" class="stego-native-picker" type="file" aria-label="Choose a carrier file, including PDF and document files" aria-describedby="stegoCarrierStatus"/);
+  assert.match(html, /PDF, document, or other file/);
+  assert.match(html, /PDFs keep their format with an encrypted attachment/);
+  assert.doesNotMatch(html.match(/<input id="stegoCarrier"[^>]*>/)?.[0]||'', /\saccept=/);
+  assert.match(html, /id="stegoPickerHint"/);
+  assert.match(html, /id="stegoPickerAction" class="stego-picker-action">Browse files/);
   assert.match(html, /id="stegoModeHide" class="stego-mode-button" aria-pressed="true"/);
   assert.match(html, /id="stegoModeExtract" class="stego-mode-button" aria-pressed="false"/);
   assert.match(html, /id="stegoCapacityValue"/);
@@ -52,8 +57,9 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(html, /id="stegoChooseFolder" class="stego-picker-button stego-picker-button-secondary"/);
   assert.match(html, /id="stegoFileSelectionSummary"[^>]*aria-live="polite"/);
   assert.match(html, /id="stegoClearFiles" class="stego-clear-files" hidden/);
+  assert.match(html, /<section id="stegoFilePicker"[\s\S]*?<div class="stego-file-selection">[\s\S]*?<\/div>\s*<\/section>\s*<p id="stegoPayloadStatus"/);
   assert.match(html, /Or drop files here · use Choose folder for a directory/);
-  assert.match(html, /id="stegoText"/);
+  assert.match(html, /<textarea id="stegoText"[^>]*spellcheck="false"[^>]*autocomplete="off"/);
   assert.match(html, /id="stegoHide"/);
   assert.match(html, /id="stegoExtract"/);
   assert.match(html, /Use a copy and keep the output unchanged\./);
@@ -107,6 +113,7 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(html, /id="migrationStatus" role="status" aria-live="polite"/);
   assert.match(html, /id="migrateLegacy">Prepare AES-256-GCM migration<\/button>/);
   const styles = await readFile(new URL('css/styles.css', root), 'utf8');
+  assert.match(styles, /\[hidden\]\s*\{\s*display:\s*none\s*!important\s*\}/);
   assert.match(styles, /\.migration\[hidden\],\.migration \[hidden\]\{display:none\}/);
   assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="assets\/hex-watch\.svg" sizes="any">/);
   assert.match(html, /<link rel="icon" type="image\/png" sizes="512x512" href="assets\/hex-watch-project\.png">/);
@@ -118,7 +125,7 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.equal(projectIcon.readUInt32BE(16), 512);
   assert.equal(projectIcon.readUInt32BE(20), 512);
   const app = await readFile(new URL('js/app.js', root), 'utf8');
-  assert.match(app, /const operationControls=\[[\s\S]*?fileInput,[\s\S]*?\$\('verifySignature'\),\s*stegoCarrier,stegoText,stegoFiles,stegoFolder,stegoChooseFilesB,stegoChooseFolderB,\s*stegoClearFilesB,stegoHideB,stegoExtractB,stegoModeHideB,stegoModeExtractB,\s*stegoSeparateKey,stegoAccessKey,stegoPassphraseLength,stegoGeneratePassphraseB,\$\('stegoAccessKeyEye'\)\s*\]/);
+  assert.match(app, /const operationControls=\[[\s\S]*?fileInput,[\s\S]*?\$\('verifySignature'\),\s*stegoCarrier,stegoText,stegoFiles,stegoFolder,stegoChooseFilesB,stegoChooseFolderB,\s*stegoClearFilesB,stegoHideB,stegoExtractB,stegoModeHideB,stegoModeExtractB,\s*stegoAccessKey,stegoPassphraseLength,stegoGeneratePassphraseB,\$\('stegoAccessKeyEye'\)\s*\]/);
   assert.match(app, /stegoChooseFilesB\.addEventListener\('click',\(\)=>stegoFiles\.click\(\)\)/);
   assert.match(app, /stegoChooseFolderB\.addEventListener\('click',\(\)=>stegoFolder\.click\(\)\)/);
   assert.match(app, /stegoClearFilesB\.addEventListener\('click',\(\)=>\{\s*stegoFiles\.value='';\s*stegoFolder\.value='';\s*updateStegoPayloadSummary\(\)/);
@@ -170,6 +177,8 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(app, /decryptRsaThenAes\(value,privateKey,pw\)/);
   assert.match(app, /RSA1 token format/);
   assert.match(app, /audio\.setNarrationMode\(selected\)/);
+  assert.match(app, /value\.startsWith\(CBC_TAG\)\|\|value\.startsWith\(CBC_LEGACY_TAG\)/);
+  assert.match(app, /value\.startsWith\(AES_TAG\)\|\|value\.startsWith\(LEGACY_AES_TAG\)\|\|value\.startsWith\(CBC_TAG\)\|\|value\.startsWith\(CBC_LEGACY_TAG\)/);
   assert.match(app, /audio\.announceStatus\(dec\?'messageDecrypted':'messageEncrypted'\)/);
   assert.match(app, /audio\.announceStatus\(decrypting\?'fileDecrypted':'fileEncrypted'\)/);
   assert.match(app, /audio\.announceStatus\('rsaKeyGenerated'\)/);
@@ -200,6 +209,8 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(app, /\$\('key'\)\.addEventListener\('input',\(\)=>\{invalidateMessageResult\(\);updatePassphraseStrength\(\);updateActionButtons\(\)\}\)/);
   assert.match(app, /else if\(selected==='legacy'\)\s*\{\s*if\(!pw\).*?r=encryptGrumpyV2\(raw,pw\);/s);
   assert.match(app, /if\(dec&&selected==='legacy'\)\s*\{\s*legacyMigrationText=r;/);
+  assert.match(app, /function clearLegacyMigration\(\)\{\s*legacyMigrationText=null;\s*\$\('legacyMigration'\)\.hidden=true;\s*\$\('migrateLegacy'\)\.hidden=false;\s*\$\('migrationStatus'\)\.hidden=true;\s*\$\('migrationStatus'\)\.textContent='';\s*\}/);
+  assert.match(app, /const migrated=legacyMigrationText;\s*mode\.value='aes';\s*key\.value='';\s*inp\.value=migrated;\s*invalidateMessageResult\(\);\s*refresh\(\);\s*updatePassphraseStrength\(\);\s*\$\('legacyMigration'\)\.hidden=false;\s*\$\('migrateLegacy'\)\.hidden=true;\s*\$\('migrationStatus'\)\.textContent=/);
   assert.match(app, /generatePassphrase\(Number\(\$\('passphraseLength'\)\.value\)\)/);
   assert.match(app, /normalizeExpectedDigest\(expectedValue,expectedAlgorithm\)/);
   assert.match(app, /HASH_DIGEST_LENGTHS\[expectedAlgorithm\]/);
@@ -215,7 +226,8 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   const legacySelection = app.match(/mode\.addEventListener\('change',\(\)=>\{([\s\S]*?)\n\}\);/)?.[1];
   assert.ok(legacySelection);
   assert.match(legacySelection, /if\(mode\.value==='legacy'&&!legacyWarningAcknowledged\)/);
-  assert.match(legacySelection, /if\(!accepted\)\{\s*mode\.value=lastSelectedMode;\s*return;\s*\}/);
+  assert.match(legacySelection, /if\(!accepted\)\{\s*mode\.value=lastSelectedMode;\s*refresh\(\);/);
+  assert.match(app, /function refresh\(\)\{\s*const selected=mode\.value;\s*lastSelectedMode=selected;/);
   assert.ok(legacySelection.indexOf('legacyWarningAcknowledged=true;') > legacySelection.indexOf('if(!accepted)'));
   assert.match(app, /status:'read error'/);
   assert.match(app, /status:!isHashFileSizeAllowed\(file\.size\)\?'too large':'unavailable'/);
@@ -250,6 +262,8 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   const guide = await readFile(new URL('docs/PROJECT_GUIDE.md', root), 'utf8');
   assert.match(guide, /## Digital signatures for encrypted messages/);
   assert.match(guide, /Compare the full public-key fingerprint/);
+  assert.match(guide, /accepts a carrier image, video, audio recording, PDF, document, or other file/);
+  assert.match(guide, /Rewriting a PDF can invalidate digital signatures/);
   assert.match(guide, /frame-ancestors 'none'/);
   assert.match(guide, /X-Content-Type-Options: nosniff/);
   assert.match(guide, /Referrer-Policy: no-referrer/);
@@ -273,8 +287,10 @@ test('application scripts do not send data remotely or persist it in browser sto
       `${file.pathname} must not add network transmission APIs`);
     assert.doesNotMatch(source, /\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b|\bdocument\.cookie\b/,
       `${file.pathname} must not add persistent browser storage`);
-    assert.doesNotMatch(source, /\bconsole\.(?:log|info|warn|error|trace)\s*\(/,
-      `${file.pathname} must not add unrestricted console logging`);
+    if (!file.pathname.includes('/vendor/')) {
+      assert.doesNotMatch(source, /\bconsole\.(?:log|info|warn|error|trace)\s*\(/,
+        `${file.pathname} must not add unrestricted console logging`);
+    }
   }
 });
 
@@ -329,15 +345,30 @@ test('image payload controls track carrier format, capacity, keyboard, and drag-
   assert.match(app, /stegoCarrierFormat!=='png'/);
   assert.match(app, /stegoCarrierFormat!=='file'/);
   assert.match(app, /stegoCapacityBar'\)\.value=Math\.min\(MAX_STEGO_PAYLOAD_BYTES,capacity\)/);
+  assert.match(app, /if\(!png\)throw new Error\('image'\);\s*if\(png\.size>MAX_STEGO_IMAGE_BYTES\)throw new Error\('stegooutputlarge'\)/);
+  assert.match(app, /stegooutputlarge:'The resulting PNG would be larger than 32 MiB and cannot be downloaded\./);
   assert.match(app, /stegoDropzone\.addEventListener\('keydown'/);
   assert.match(app, /stegoDropzone\.addEventListener\('dragover'/);
-  assert.match(app, /stegoDropzone\.addEventListener\('drop'/);
+  assert.match(app, /stegoDropzone\.addEventListener\('drop',event=>\{\s*event\.preventDefault\(\);\s*stegoDropzone\.classList\.remove\('dragging'\);\s*if\(locked\|\|operationBusy\)return;/);
+  assert.match(app, /hashDropzone\.addEventListener\('click',event=>\{\s*if\(locked\|\|operationBusy\|\|event\.target===hashInput\)return;\s*hashInput\.click\(\);/);
+  assert.match(app, /hashDropzone\.addEventListener\('drop',event=>\{\s*event\.preventDefault\(\);\s*hashDropzone\.classList\.remove\('dragging'\);\s*if\(locked\|\|operationBusy\)return;/);
+  assert.match(app, /if\(locked\|\|operationBusy\)return;\s*hashInput\.click\(\);/);
+  assert.match(app, /if\(locked\|\|operationBusy\)return;\s*stegoCarrier\.click\(\);/);
   assert.match(app, /Choose one carrier image at a time/);
+  assert.match(app, /Choose an image, video, audio recording, PDF, document, or other file/);
+  assert.match(app, /classList\.add\('has-file'\)/);
+  assert.match(app, /classList\.remove\('has-file'\)/);
+  assert.match(app, /`\$\{kind\} carrier · Appended payload`/);
+  assert.match(app, /Original stays unchanged; encrypted data will be appended/);
   assert.match(app, /function estimateStegoPayload\(\)/);
   assert.match(app, /encryptedBytes>stegoCarrierCapacity/);
   assert.match(styles, /\.stego-capacity-track::-webkit-progress-value/);
   assert.match(styles, /\.stego-capacity-track::-moz-progress-bar/);
   assert.match(styles, /\.stego-picker\.dragging/);
+  assert.match(styles, /grid-template-columns:44px minmax\(0,1fr\) auto/);
+  assert.match(styles, /-webkit-line-clamp:2/);
+  assert.match(styles, /\.stego-picker\.has-file/);
+  assert.match(styles, /\.stego-picker\.has-file \.stego-picker-icon::before/);
   assert.match(styles, /\.stego-file-picker\.dragging/);
   assert.match(html, /One file stays in its original format\.[\s\S]*?Multiple files or a folder are bundled into a ZIP/);
   assert.match(html, /Folders and file collections recover as ZIP/);
@@ -351,32 +382,43 @@ test('image payload controls track carrier format, capacity, keyboard, and drag-
   assert.match(app, /stegoformat:extracting&&carrierFormat==='jpeg'/);
   assert.match(app, /stegoformat:'This carrier does not contain a valid Hex Watch encrypted payload\.'/);
   assert.match(app, /stegoCapacityValue'\)\.textContent='Up to 4 MiB'/);
-  assert.match(html, /id="stegoSeparateKey" type="checkbox" aria-controls="stegoKeySetup"/);
-  assert.match(html, /id="stegoKeySetup" class="stego-key-setup" hidden/);
+  assert.doesNotMatch(html, /stegoSeparateKey|Access key above is used/);
+  assert.match(html, /id="stegoKeySetup" class="stego-key-setup"/);
+  assert.match(html, /This workspace always uses its own access key/);
   assert.match(html, /id="stegoPassphraseLength"/);
+  assert.match(html, /<details class="stego-key-advanced">[\s\S]*?<\/details>/);
+  assert.doesNotMatch(html, /stegoRequireKeyLength|Require this exact length/);
   assert.match(html, /id="stegoGeneratePassphrase"/);
   assert.match(html, /id="stegoKeyStrengthMeter" class="strength-track"/);
+  assert.match(app, /const accessKey=stegoAccessKey\.value;/);
   assert.match(app, /function getStegoKeySettings\(\)/);
-  assert.match(app, /const \{value:stegoPassword,input:stegoPasswordInput,requiredLength\}=getStegoKeySettings\(\)/);
-  assert.match(app, /const validStegoKey=stegoMode==='hide'[\s\S]*?countPassphraseCharacters\(stegoKey\.value\)>=10/);
+  assert.match(app, /value:stegoAccessKey\.value,\s*input:stegoAccessKey/);
+  assert.doesNotMatch(app, /stegoSeparateKey|\(isSeparate\?stegoAccessKey:key\)/);
+  assert.match(app, /const \{value:stegoPassword,input:stegoPasswordInput\}=getStegoKeySettings\(\)/);
+  assert.match(app, /const validStegoKey=stegoKeyLength>=10/);
+  assert.match(app, /Generator target: \$\{target\} characters/);
+  assert.doesNotMatch(app, /stegoRequireKeyLength|keyLengthRequired|keyLengthOptional/);
   assert.match(app, /stegoHideB\.disabled=unavailable\|\|stegoMode!=='hide'\|\|!validCarrier\|\|!validPayload\|\|!validStegoKey/);
+  assert.match(app, /stegoExtractB\.disabled=unavailable\|\|stegoMode!=='extract'\|\|!validCarrier\|\|!validStegoKey\|\|\s*\(stegoCarrierFormat!=='png'&&stegoCarrierFormat!=='file'&&stegoCarrierFormat!=='pdf'\)/);
   assert.match(app, /await decryptFileStream\(new Blob\(\[encrypted\]\),stegoPassword/);
   assert.match(app, /await encryptFileStream\(new Blob\(\[wrapped\]\),stegoPassword/);
   assert.match(app, /function updateStegoPassphraseStrength\(\)/);
   assert.match(app, /stegoGeneratePassphraseB\.addEventListener\('click'/);
-  assert.match(app, /function setStegoStatus\(message,isError=false,narrationEvent=''\)[\s\S]*?if\(narrationEvent\)audio\.announceStegoStatus\(narrationEvent\)/);
+  assert.match(app, /function setStegoStatus\(message,isError=false,narrationEvent='',narrationDetail=''\)[\s\S]*?if\(narrationEvent\)audio\.announceStegoStatus\(narrationEvent,narrationDetail\)/);
+  assert.match(app, /stegoAccessKey\.addEventListener\('blur',\(\)=>audio\.announcePassphraseResult/);
   assert.match(app, /setStegoStatus\(message,true,'operationFailed'\)/);
   assert.match(app, /setStegoStatus\([\s\S]*?false,'embedded'\)/);
   assert.match(app, /setStegoStatus\([\s\S]*?false,'appended'\)/);
   assert.match(app, /setStegoStatus\([\s\S]*?false,'extracted'\)/);
-  assert.match(app, /stegoSeparateKey\.addEventListener\('change'/);
-  assert.match(app, /audio\.announceStegoStatus\(stegoSeparateKey\.checked\?'separateKeyEnabled':'sharedKeyEnabled'\)/);
   assert.match(app, /setStegoMode\(nextMode,announce=false\)/);
   assert.match(app, /if\(announce\)audio\.announceStegoStatus\(hiding\?'embedMode':'extractMode'\)/);
   assert.match(app, /audio\.announceStegoStatus\('carrierAppendReady'\)/);
+  assert.match(app, /audio\.announceStegoStatus\('pdfCarrierReady'\)/);
+  assert.match(app, /attachEncryptedPayloadToPdf\(pdfBytes,encrypted\)/);
+  assert.match(app, /extractEncryptedPayloadFromPdf\(new Uint8Array\(await carrier\.arrayBuffer\(\)\)\)/);
   assert.match(app, /'imageCarrierReady',\s*`\$\{stegoCarrierFormat\.toUpperCase\(\)\} image selected\./);
-  assert.match(html, /PNG and JPEG images use pixels; JPEG becomes PNG\. Other files use appended data\./);
-  assert.match(html, /encrypted block is appended—not concealed—and may affect compatibility/);
+  assert.match(html, /PNG and JPEG images use pixels; PDFs keep their format with an encrypted attachment\. Other files use appended data\./);
+  assert.match(html, /Video, audio, and other files use appended data/);
   assert.match(app, /setStegoStatus\(''\);\s*updateStegoPayloadSummary\(\);/);
 });
 

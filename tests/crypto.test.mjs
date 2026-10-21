@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AES_TAG, LEGACY_AES_TAG, AES_KEY_SIZES, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG,
+  AES_TAG, LEGACY_AES_TAG, AES_KEY_SIZES, CBC_TAG, CBC_LEGACY_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG,
   MAX_MESSAGE_BYTES, MAX_TOKEN_CHARS, KDF_ITERATIONS,
   encryptAesGcm, decryptAesGcm, encryptCbcHmac, decryptCbcHmac,
   encryptRsaHybrid, decryptRsaHybrid, encryptRsaDirect, decryptRsaDirect,
   encryptRsaThenAes, decryptRsaThenAes,
   generateRsaKeyPair, fingerprintRsaPublicKey,
+  generateEcdsaKeyPair, signMessageToken, verifyMessageToken,
   encryptGrumpyV2, decryptGrumpyV2,
   FILE_TAG, LEGACY_MAX_FILE_BYTES, LEGACY_MAX_FILE_TOKEN_CHARS, MAX_FILE_BYTES,
   FILE_CHUNK_BYTES, MAX_ENCRYPTED_FILE_BYTES, encryptFileBytes, decryptFileToken,
@@ -22,6 +23,34 @@ function tamper(token, prefix, byteIndex) {
   const bytes = Buffer.from(token.slice(prefix.length), 'base64url');
   bytes[byteIndex] ^= 1;
   return prefix + bytes.toString('base64url');
+}
+
+async function createCbc1Fixture(text, passphrase) {
+  const encoder = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(16));
+  const base = await crypto.subtle.importKey(
+    'raw', encoder.encode(passphrase.normalize('NFKC')), 'PBKDF2', false, ['deriveBits']
+  );
+  const bits = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: KDF_ITERATIONS },
+    base,
+    512
+  ));
+  const [encryptionKey, macKey] = await Promise.all([
+    crypto.subtle.importKey('raw', bits.slice(0, 32), 'AES-CBC', false, ['encrypt']),
+    crypto.subtle.importKey('raw', bits.slice(32), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  ]);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-CBC', iv }, encryptionKey, encoder.encode(text)
+  ));
+  const body = Buffer.concat([salt, iv, ciphertext]);
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    macKey,
+    Buffer.concat([encoder.encode(CBC_LEGACY_TAG), body])
+  );
+  return `${CBC_LEGACY_TAG}${Buffer.concat([body, new Uint8Array(signature)]).toString('base64url')}`;
 }
 
 test('AES-GCM round-trips empty and Unicode messages and rejects tampering/wrong keys', async () => {
@@ -66,11 +95,78 @@ test('CBC-HMAC round-trips empty and Unicode messages and authenticates before d
   for (const message of ['', 'Cipher text: 世界 🔐 e\u0301']) {
     const token = await encryptCbcHmac(message, password);
     assert.ok(token.startsWith(CBC_TAG));
+    assert.equal(CBC_TAG, 'CBC2.');
     assert.equal(await decryptCbcHmac(token, password), message);
     await assert.rejects(decryptCbcHmac(token, `${password}!`), /auth/);
     const bytes = Buffer.from(token.slice(CBC_TAG.length), 'base64url');
     await assert.rejects(decryptCbcHmac(tamper(token, CBC_TAG, bytes.length - 1), password), /auth/);
   }
+});
+
+test('CBC2 tokens use a 256-bit PBKDF2 master and HKDF-separated keys', async () => {
+  const plaintext = 'CBC2 key schedule';
+  const token = await encryptCbcHmac(plaintext, password);
+  const raw = Buffer.from(token.slice(CBC_TAG.length), 'base64url');
+  const salt = raw.subarray(0, 16);
+  const iv = raw.subarray(16, 32);
+  const base = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password.normalize('NFKC')),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const master = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: KDF_ITERATIONS },
+    base,
+    256
+  );
+  const hkdfKey = await crypto.subtle.importKey('raw', master, 'HKDF', false, ['deriveKey']);
+  const [encryptionKey, authenticationKey] = await Promise.all([
+    crypto.subtle.deriveKey(
+      {
+        name: 'HKDF',
+        hash: 'SHA-256',
+        salt,
+        info: new TextEncoder().encode('Hex Watch Cipher CBC2 AES-256-CBC key v1')
+      },
+      hkdfKey,
+      { name: 'AES-CBC', length: 256 },
+      false,
+      ['decrypt']
+    ),
+    crypto.subtle.deriveKey(
+      {
+        name: 'HKDF',
+        hash: 'SHA-256',
+        salt,
+        info: new TextEncoder().encode('Hex Watch Cipher CBC2 HMAC-SHA-256 key v1')
+      },
+      hkdfKey,
+      { name: 'HMAC', hash: 'SHA-256', length: 256 },
+      false,
+      ['verify']
+    )
+  ]);
+  assert.equal(await crypto.subtle.verify(
+    'HMAC',
+    authenticationKey,
+    raw.subarray(-32),
+    Buffer.concat([Buffer.from(CBC_TAG), raw.subarray(0, -32)])
+  ), true);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-CBC', iv },
+    encryptionKey,
+    raw.subarray(32, -32)
+  );
+  assert.equal(new TextDecoder().decode(decrypted), plaintext);
+});
+
+test('CBC-HMAC keeps CBC1 tokens decryptable with the legacy derivation', async () => {
+  const token = await createCbc1Fixture('CBC1 compatibility message 🔐', password);
+  assert.ok(token.startsWith(CBC_LEGACY_TAG));
+  assert.equal(await decryptCbcHmac(token, password), 'CBC1 compatibility message 🔐');
+  await assert.rejects(decryptCbcHmac(token, `${password}!`), error => error.message === 'auth');
 });
 
 test('CBC-HMAC rejects changes to ciphertext, IV, salt, and authentication tag', async () => {
@@ -95,7 +191,8 @@ test('CBC-HMAC rejects changes to ciphertext, IV, salt, and authentication tag',
 test('CBC-HMAC rejects truncated or structurally incomplete tokens before decryption', async () => {
   const token = await encryptCbcHmac('Never return a partial plaintext.', password);
   const payload = Buffer.from(token.slice(CBC_TAG.length), 'base64url');
-  await assert.rejects(decryptCbcHmac('CBC1.not*base64', password), error => error.message === 'format');
+  await assert.rejects(decryptCbcHmac(`${CBC_TAG}not*base64`, password), error => error.message === 'format');
+  await assert.rejects(decryptCbcHmac(`${CBC_LEGACY_TAG}not*base64`, password), error => error.message === 'format');
   for (const length of [0, 64, 79, payload.length - 1]) {
     const truncated = CBC_TAG + payload.subarray(0, length).toString('base64url');
     await assert.rejects(
@@ -104,6 +201,14 @@ test('CBC-HMAC rejects truncated or structurally incomplete tokens before decryp
       `truncation to ${length} bytes must be rejected`
     );
   }
+});
+
+test('ECDSA signatures support both CBC2 and legacy CBC1 message tokens', async () => {
+  const pair = await generateEcdsaKeyPair();
+  const cbc2Token = await encryptCbcHmac('signed CBC2', password);
+  const cbc1Token = await createCbc1Fixture('signed CBC1', password);
+  assert.equal((await verifyMessageToken(await signMessageToken(cbc2Token, pair.privateKey), pair.publicKey)).token, cbc2Token);
+  assert.equal((await verifyMessageToken(await signMessageToken(cbc1Token, pair.privateKey), pair.publicKey)).token, cbc1Token);
 });
 
 test('AES-GCM and CBC-HMAC normalize equivalent Unicode passphrases with NFKC', async () => {

@@ -5,12 +5,12 @@
 <h1 align="center">Hex Watch Cipher</h1>
 
 <p align="center">
-  A static, dependency-free browser workspace for encrypting and decrypting text and files on your own device.
+  A static browser workspace for encrypting and decrypting text and files on your own device, with locally bundled PDF attachment support.
 </p>
 
 <p align="center">
   <img alt="No backend" src="https://img.shields.io/badge/backend-none-brightgreen.svg" />
-  <img alt="No dependencies" src="https://img.shields.io/badge/dependencies-none-brightgreen.svg" />
+  <img alt="Bundled PDF support" src="https://img.shields.io/badge/PDF%20support-pdf--lib%20bundled-blue.svg" />
   <img alt="Web Crypto API" src="https://img.shields.io/badge/crypto-Web%20Crypto%20API-orange.svg" />
 </p>
 
@@ -62,7 +62,7 @@ The app creates encrypted output for the user to transfer through a separate cha
 ### Text protection and key management
 
 - Encrypt and decrypt text with password-based AES-GCM, authenticated AES-CBC compatibility mode, RSA-OAEP hybrid encryption, direct RSA for short messages, or the RSA-first dual-key envelope.
-- Generate 16-, 20-, 24-, 32-, 40-, or 64-character passphrases with the browser's cryptographic random-number generator. Generated values are checked against the same meter and returned only when that heuristic scores them 100. The meter gives a score and actionable suggestions based on selected length, character variety, repeated patterns/runs, and common sequences. It is only a rough estimate, not a password audit: character groups are not a requirement, and it cannot detect breached, reused, or personal passphrases. Generated values are not stored and must be saved securely by the user.
+- Generate 16-, 20-, 24-, 32-, 40-, or 64-character passphrases with the browser's cryptographic random-number generator. Generated values are checked against the same meter and returned only when that heuristic scores them 100. The meter gives a score and actionable suggestions based on selected length, character variety, repeated patterns/runs, and common sequences. It is only a rough estimate, not a password audit: character groups are not an encryption requirement, and it cannot detect breached, reused, or personal passphrases. For the media/file payload workspace, the length selector is only the generated-passphrase target; manually entered workspace keys are not locked to it. Generated values are not stored and must be saved securely by the user.
 - Choose 128-, 192-, or 256-bit derived AES-GCM keys when supported by the browser's Web Crypto implementation. The app checks AES-192 support and disables that option if unavailable; decryption of existing AES-192 tokens may require a different browser. New tokens record the selected key size; older `CT1.` AES-256-GCM tokens remain supported.
 - Generate 2048-, 3072-, or 4096-bit RSA-OAEP key pairs, import and export supported RSA PEM keys, and compare SHA-256 fingerprints of public keys.
 - Optionally sign encrypted message tokens with ECDSA P-256 / SHA-256, and verify signatures independently or automatically before decryption. Signing checks the newly produced signature against the displayed public key before releasing the signed token, so a mismatched private/public pair cannot produce a misleading result. Narration reports signature, key-generation, and verification outcomes without reading key material aloud.
@@ -73,7 +73,7 @@ The app creates encrypted output for the user to transfer through a separate cha
 ### File protection and integrity checking
 
 - Encrypt files up to 1 GiB using 4 MiB chunks of authenticated AES-256-GCM; decrypt supported HWF1 legacy files up to 1 MiB.
-- Carry encrypted text and files in a media/file payload workspace: PNG pixels provide fragile concealment, while video, audio, and other files receive an appended encrypted block that is not concealed.
+- Carry encrypted text and files in a media/file payload workspace: PNG pixels provide fragile concealment, PDFs receive a native encrypted attachment, and video, audio, non-PDF documents, and other files receive an appended encrypted block that is not concealed.
 - Preserve a single payload file in its original format; package multiple files or a folder as an uncompressed ZIP so paths can be recovered together.
 - Use a separate file hash calculator for one or more local files. Select algorithms from MD5, SHA-1, SHA-256, and SHA-512, then compare the resulting digests with values obtained from a trusted source.
 - Select files through the browser picker or drag-and-drop for hashing. File encryption and hashing remain separate operations.
@@ -82,7 +82,7 @@ The app creates encrypted output for the user to transfer through a separate cha
 ### Guidance, accessibility, and workspace behavior
 
 - Hear optional narration in English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, or French. Available voices and pronunciation depend on the browser and operating system.
-- Receive contextual narration for method and key-size changes, media-workspace mode, carrier and capacity changes, shared/separate key selection, operation outcomes, errors, and legacy migration. Message contents, keys, and decrypted output are never read aloud.
+- Receive contextual narration for method and key-size changes, media-workspace mode, carrier and capacity changes, workspace-key guidance, operation outcomes, errors, and legacy migration. Message contents, keys, and decrypted output are never read aloud.
 - Automatically clear sensitive workspace fields after five minutes of inactivity or on a `pagehide` event. This no-password privacy lock is intended to reduce casual viewing, not to authenticate users or guarantee secure erasure.
 - Prevent overlapping cryptographic operations and disable relevant inputs while an operation is pending, so the active method, keys, and source data cannot change mid-operation.
 - Use a responsive interface with visible keyboard focus, keyboard shortcuts, progress and operation status, and screen-reader status announcements.
@@ -92,7 +92,7 @@ The app creates encrypted output for the user to transfer through a separate cha
 | Method in the app | Token / file format | Key material | Use |
 | --- | --- | --- | --- |
 | **AES-GCM · Passphrase-based (Recommended)** | `CT2.` | Passphrase | Recommended for new password-protected text. Authenticated encryption detects a wrong passphrase or modified token. |
-| **AES-CBC + HMAC · Compatibility** | `CBC1.` | Passphrase | For compatibility with CBC workflows. The HMAC is verified before decryption. Prefer AES-GCM for new messages. |
+| **AES-CBC + HMAC · Compatibility** | `CBC2.` (decrypts `CBC1.`) | Passphrase | For compatibility with CBC workflows. The HMAC is verified before decryption. Prefer AES-GCM for new messages. |
 | **AES-GCM + RSA-OAEP · Hybrid (Recommended)** | `RSA1.` | Recipient's RSA public key | For encrypting messages to a recipient without first sharing a passphrase. AES-GCM encrypts the message; RSA-OAEP wraps a fresh message key. |
 | **RSA-OAEP + AES-GCM · Dual-key (short messages)** | `RSA3.` | Recipient's RSA public key and shared passphrase | RSA-OAEP encrypts the short message first; PBKDF2-derived AES-GCM then encrypts the RSA ciphertext. Decryption requires both the matching private key and the same passphrase. |
 | **RSA-OAEP · Direct encryption (short messages)** | `RSA2.` | Recipient's RSA public key | Direct RSA-OAEP encryption for very short text only. Use AES-GCM + RSA-OAEP Hybrid for longer messages. |
@@ -106,11 +106,11 @@ The menu presents one option for each distinct construction; it no longer has du
 
 ### Passphrase generator and strength estimate
 
-Select one of the supported access-key lengths: **16, 20, 24, 32, 40, or 64 Unicode code points** (24 by default). This setting applies to both generated and manually entered access keys used for new AES-GCM, CBC-HMAC, RSA3, and file encryption. The app blocks those operations unless the key has exactly the selected number of Unicode code points and is no more than 4,096 UTF-8 bytes. Decryption is not constrained by the current selection. RSA-only message encryption and legacy Grumpy v2 compatibility are not governed by this setting.
+Select one of the supported main **Access key** lengths: **16, 20, 24, 32, 40, or 64 Unicode code points** (24 by default). For new AES-GCM, CBC-HMAC, RSA3, and file encryption, the main key must exactly match the selected length and be no more than 4,096 UTF-8 bytes. Decryption is not constrained by the current selection. RSA-only message encryption and legacy Grumpy v2 compatibility are not governed by this setting. The media/file payload workspace uses a separate, dedicated key and does not follow this selected-length rule.
 
 Select **Generate secure passphrase** to create a value with the required length. The app uses the browser's cryptographic random-number generator and rejection sampling, and guarantees lowercase, uppercase, numeric, and symbol characters. Generation requires Web Crypto in a secure context such as HTTPS or `localhost`. The generated passphrase fills the access-key field but is not saved, copied, or recoverable; store it securely before relying on it.
 
-The access-key guidance checklist reports selected-length, lowercase, uppercase, number, and symbol requirements as you type. A separate smoothly updating quality meter considers progress toward the selected length, character variety, repeated runs, and common sequences. Naturally occurring duplicate characters are not penalized by themselves, so a generated passphrase meeting its length and character-group requirements can reach a full score. This remains a heuristic: it cannot recognize reused passwords, personal information, most keyboard patterns, or how a manually entered value was chosen, and is not a password audit or security guarantee. Prefer a long, unique generated value. The length setting gates new encryption; it does not change encryption algorithms or key derivation.
+For the main Access key, the guidance checklist reports selected-length, lowercase, uppercase, number, and symbol checks as you type; the selected length is enforced for new password-based message and file encryption, while character groups are not required. The media-workspace checklist treats selected length as a generator target and does not enforce it for manually entered keys. Its minimum is 10 Unicode code points. A smoothly updating quality meter considers length, character variety, repeated runs, and common sequences. Naturally occurring duplicate characters are not penalized by themselves, so a generated passphrase meeting its generation criteria can reach a full score. This remains a heuristic: it cannot recognize reused passwords, personal information, most keyboard patterns, or how a manually entered value was chosen, and is not a password audit or security guarantee. Prefer a long, unique generated value. The length setting does not change encryption algorithms or key derivation.
 
 ### AES-GCM
 
@@ -126,7 +126,7 @@ Web Crypto support is browser-dependent. Chromium tested with this project rejec
 
 ### AES-CBC with HMAC
 
-The `CBC1.` compatibility format derives separate AES-256-CBC and HMAC-SHA-256 keys from the normalized passphrase. A fresh random salt and IV are used. The HMAC covers the format identifier, salt, IV, and ciphertext, and the app verifies it before attempting CBC decryption. AES-GCM remains the preferred choice for new messages.
+New `CBC2.` tokens derive a 256-bit master key from the normalized passphrase using PBKDF2-HMAC-SHA-256 with 600,000 iterations and a fresh random salt. HKDF-SHA-256 then derives distinct AES-256-CBC and HMAC-SHA-256 keys with separate, format-specific context labels. A fresh random IV is used. The HMAC covers the format identifier, salt, IV, and ciphertext, and is verified before CBC decryption. Older `CBC1.` tokens remain decryptable using their original 512-bit PBKDF2 derivation; only new CBC2 encryption uses the key-separated derivation. AES-GCM remains the preferred choice for new messages.
 
 ### AES-GCM + RSA-OAEP Hybrid
 
@@ -170,7 +170,7 @@ RSA encryption does not authenticate the sender, prove a public key's identity b
 
 ## Digital signatures for encrypted messages
 
-Enable **Sign encrypted output** to wrap a newly encrypted message token in a `SIG1.` envelope signed with ECDSA P-256 and SHA-256. The signature covers only the ciphertext token—the exact serialized encrypted token and its format data—with a versioned application-specific context; it does not cover plaintext, alter the underlying encryption format, or apply to files or Grumpy v2. Signed envelopes can wrap `CT2.`, `CT1.`, `CBC1.`, `RSA1.`, `RSA2.`, and `RSA3.` text tokens. Older unsigned tokens and all existing encryption formats remain unchanged.
+Enable **Sign encrypted output** to wrap a newly encrypted message token in a `SIG1.` envelope signed with ECDSA P-256 and SHA-256. The signature covers only the ciphertext token—the exact serialized encrypted token and its format data—with a versioned application-specific context; it does not cover plaintext, alter the underlying encryption format, or apply to files or Grumpy v2. Signed envelopes can wrap `CT2.`, `CT1.`, `CBC2.`, legacy `CBC1.`, `RSA1.`, `RSA2.`, and `RSA3.` text tokens. Older unsigned tokens remain supported.
 
 To sign, generate an ECDSA P-256 key pair or paste a PKCS#8 private signing key. Generated private keys are non-extractable and kept only in page memory by default; they are cleared when the workspace locks or the page closes. Choose **Exportable PEM** before generating if you need a user-managed backup. The private key is then visible in the page and must be stored securely. The export setting applies when generating the next key; it does not make an existing non-extractable key exportable. A lost non-extractable signing key cannot be recovered.
 
@@ -196,17 +196,19 @@ For Save File picker operations, output is written to a fresh transactional stre
 
 ## Image and media payload embedding
 
-The **Media & file payload workspace** encrypts one selected payload source—text, one file, multiple files, or a folder—with authenticated AES-256-GCM. By default it uses the main **Access key**, so the workspace can be used without configuring another key. The optional **Use a separate access key for this workspace** setting provides an independent key, its own selected-length requirement, quality estimate, and secure passphrase generator. New payload encryption enforces the selected length; extraction uses the entered key and does not enforce the current length setting. Select the same key source and enter the same key value used for embedding. The separate key is not persisted and is cleared, along with its enabled setting, by **Clear** and by the privacy lock.
+The **Media & file payload workspace** accepts a carrier image, video, audio recording, PDF, document, or other file, and encrypts one selected payload source—text, one file, multiple files, or a folder—with authenticated AES-256-GCM. It always requires its own **Workspace access key**; the main **Access key** is never used here. The workspace key is used for both embedding and extraction, and must contain at least 10 Unicode code points. It is limited to 4,096 UTF-8 bytes, consistent with the password-based key processing limit. **Advanced key options** are collapsed by default and optional; they contain the passphrase generator, generator-length selector, quality estimate, and guidance. The selected length (16, 20, 24, 32, 40, or 64) controls generated passphrases only. Manually entered workspace keys may be any length that meets the minimum and maximum limits; they are not length-locked. The key is not persisted and is cleared by **Clear** and by the privacy lock.
 
 PNG images use red, green, and blue least-significant-bit embedding in fully opaque pixels. JPEG input is decoded and converted to a new PNG because lossy JPEG encoding would destroy hidden bits. The generated PNG is the carrier output for extraction; the source JPEG is not modified.
 
-For video, audio, and other non-PNG/JPEG carrier files, the encrypted block is appended to a copy of the original carrier with a footer so this app can locate it during extraction. Appending is not steganographic concealment: the added bytes increase the file size and may affect compatibility or playback. The original carrier is not changed. The downloaded output name adds `.hidden` before the original extension; select that exact, unchanged output for extraction. Do not convert or edit it after embedding; compatibility is format-dependent, so test a copy.
+PDF carriers are rewritten locally with a standard PDF EmbeddedFile attachment named `hex-watch-cipher-payload.hwf2`. The encrypted payload remains inside the PDF structure, and the document's pages remain accessible in PDF readers; viewer support for displaying attachments varies. The PDF must be unencrypted and no larger than 32 MiB before processing; the generated PDF is limited to 64 MiB. A PDF that already contains this tool's attachment must be extracted before another payload is embedded. Opening a PDF does not execute an attached `.bat` or `.exe`; the attachment contains only encrypted HWF2 bytes and must be explicitly extracted and decrypted with this app. Rewriting a PDF can invalidate digital signatures, so retain the original and use a copy.
+
+For video, audio, office documents, and other non-PDF non-PNG/JPEG carrier files, the encrypted block is appended to a copy of the original carrier with a footer so this app can locate it during extraction. The picker accepts any file type; carriers are limited by file size, not by extension or MIME type. Appending is not steganographic concealment: the added bytes increase the file size and may affect compatibility or playback. It changes the carrier bytes. The original carrier is not changed. The downloaded output name adds `.hidden` before the original extension; select that exact, unchanged output for extraction. Do not convert or edit it after embedding; compatibility is format-dependent, so test a copy. The app's Content Security Policy disables media playback in the page; use an external player to check whether a generated audio/video carrier remains playable.
 
 Choose exactly one payload source at a time: enter text, choose one or more files, or choose a folder. The text area and file collection are alternatives; do not fill both. Text is recovered as `hidden-message.txt`. Use **Choose folder** to include the directory's relative paths. A single file is carried in its original format and recovered with its filename. ZIP packaging is used only for multiple files or a folder, to preserve the collection as one payload; the archive is downloaded for you to open and is not automatically unpacked. The archive builder rejects duplicate and unsafe paths.
 
-Plaintext payloads are limited to 4 MiB and collections to 1,000 files. PNG/JPEG image carriers are limited to 16 megapixels, 16,384 pixels per side, and 32 MiB; other carrier files are limited to 1 GiB. Image capacity is calculated from fully opaque pixels before encryption. The estimated encrypted size includes framing and encryption overhead, which means the usable text/file payload can be smaller than the displayed capacity. Capacity is checked before encryption. Processing stays in browser memory; the application does not upload the carrier or payload.
+Plaintext payloads are limited to 4 MiB and collections to 1,000 files. PNG/JPEG image carriers are limited to 16 megapixels, 16,384 pixels per side, and 32 MiB; PDF carriers are limited to 32 MiB input and 64 MiB output; other carrier files are limited to 1 GiB. Image capacity is calculated from fully opaque pixels before encryption. The estimated encrypted size includes framing and encryption overhead, which means the usable text/file payload can be smaller than the displayed capacity. Capacity is checked before encryption. Processing stays in browser memory; the application does not upload the carrier or payload. The PDF handler uses a locally bundled `pdf-lib` 1.17.1 module; its MIT license is in `js/vendor/pdf-lib.LICENSE.md`.
 
-PNG pixel embedding is fragile, not a robust watermark or a claim of undetectability. The generated PNG must remain unchanged for extraction; resizing, editing, screenshots, conversion, or recompression may destroy embedded bits. For appended carriers, the encrypted payload is not concealed and carrier compatibility is not guaranteed. AES-GCM protects payload contents but does not authenticate who created them.
+PNG pixel embedding is fragile, not a robust watermark or a claim of undetectability. The generated PNG must remain unchanged for extraction; resizing, editing, screenshots, conversion, or recompression may destroy embedded bits. For PDFs, the encrypted attachment may be hidden or unavailable in some viewers, and rewriting may invalidate signatures. For appended carriers, the encrypted payload is not concealed; modifying the carrier may affect media/document compatibility, and the payload is not guaranteed to survive conversion or editing. AES-GCM protects payload contents but does not authenticate who created them.
 
 ## File hash calculator
 
@@ -231,7 +233,7 @@ Use **Export results CSV** after a calculation to download a local report with f
 
 ## Narration
 
-Narration is optional and uses the browser's built-in speech synthesis. Select a narration language in the header and turn narration on. Turning it on does not start speech. After that, clicking a control or starting an operation can trigger guidance; selecting a new method, key size, hash algorithm, or narration language announces the new choice, while simply opening a dropdown or focusing a control stays quiet. In the media/file payload workspace, narration explains the selected carrier and its capacity, hide/extract mode, shared/separate key choice, and success or error outcomes. It does not speak passphrase contents or announce each progress update, avoiding exposure and unnecessary chatter. Spoken guidance uses concise sentences, normal pitch, and a measured pace. The app prefers a voice matching the selected language and region; Nigerian Pidgin can use an available English voice. When no suitable voice is installed, the browser chooses a voice for the requested language, so pronunciation and quality may vary by browser and operating system. Narration does not repeat guides.
+Narration is optional and uses the browser's built-in speech synthesis. Select a narration language in the header and turn narration on. Turning it on does not start speech. After that, clicking a control or starting an operation can trigger guidance; selecting a new method, key size, hash algorithm, or narration language announces the new choice, while simply opening a dropdown or focusing a control stays quiet. In the media/file payload workspace, narration explains the selected carrier and its capacity, hide/extract mode, workspace-key guidance, and success or error outcomes. It does not speak passphrase contents or announce each progress update, avoiding exposure and unnecessary chatter. Spoken guidance uses concise sentences, normal pitch, and a measured pace. The app prefers a voice matching the selected language and region; Nigerian Pidgin can use an available English voice. When no suitable voice is installed, the browser chooses a voice for the requested language, so pronunciation and quality may vary by browser and operating system. Narration does not repeat guides.
 
 Guidance is available in English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, and French. It explains the selected method, key sizes, controls, common tasks, and file-hash algorithms. The AES key-size guide explains the difference between the derived key and access-key length, and why a longer derived key does not replace a strong access key. The RSA key-size guide explains public and private keys and the effect of RSA size on work and short-message limits. For direct RSA and RSA-first dual-key messages, the displayed limit is based on the selected size for newly generated keys; pasted or imported keys use their own modulus size and limit. Narration also announces message, file, and file-check results, errors, and legacy-message migration steps without reading message contents, keys, or decrypted output aloud. Legacy Grumpy v2 encryption completion is explicitly identified as unsafe and advises re-encrypting with AES-GCM. Important limits and key-safety warnings are included. If speech playback fails, narration switches off and displays an error.
 
@@ -241,13 +243,13 @@ Available guide languages are **English, Yoruba, Igbo, Hausa, Nigerian Pidgin, S
 
 ### Embedding and recovering a media/file payload
 
-1. Select **Embed a payload** and choose one carrier. Use PNG for pixel-level concealment; JPEG input produces a PNG output. For video, audio, or another file, the app appends encrypted data rather than concealing it.
+1. Select **Embed a payload** and choose one carrier. PNG uses pixel embedding, JPEG input produces a PNG output, and PDFs are rewritten with an encrypted EmbeddedFile attachment while remaining PDFs. Other file types, including audio/video and non-PDF documents, receive appended encrypted data rather than concealment. See [Image and media payload embedding](#image-and-media-payload-embedding) for limits, extraction requirements, PDF viewer caveats, and compatibility warnings.
 2. Choose exactly one payload source: enter text, select one file, or select multiple files/a folder. A single file is kept in its original format. Multiple files and folders are ZIP-packaged to preserve them as one downloadable collection.
-3. Keep the default shared Access key, or enable the separate workspace key and set its length. Enter or generate the key and save it securely; keys are not recoverable by the app.
+3. Enter a dedicated workspace access key of at least 10 Unicode code points (maximum 4,096 UTF-8 bytes). Do not use the main Access key here. If desired, expand **Advanced key options** and generate a passphrase; its selected length is a generation target only and does not constrain a manually entered key. Save the workspace key securely because the app cannot recover it.
 4. Check the capacity estimate and warnings, then encrypt and embed. Use a copy of the carrier. Keep the generated output unchanged.
-5. To recover the payload, choose **Extract a payload**, select the generated output (the PNG for image carriers), and enter the same key source/value. The recovered single file or ZIP downloads locally; open ZIPs yourself.
+5. To recover the payload, choose **Extract a payload**, select the generated output (the PNG for image carriers or the attached PDF for PDF carriers), and enter the same workspace access key. The recovered single file or ZIP downloads locally; open ZIPs yourself.
 
-For non-image carriers, the appended encrypted block is visible in the file size, is not steganographic concealment, and can affect file compatibility. Never assume that a carrier will remain playable or that the payload will survive editing or conversion.
+For appended carriers, the encrypted block is visible in the file size, is not steganographic concealment, and can affect file compatibility. Never assume that a carrier will remain playable or that the payload will survive editing or conversion.
 
 ### Password-protected message
 
@@ -269,7 +271,7 @@ For short messages where only the recipient private key is needed, **RSA-OAEP ·
 
 ### File
 
-1. Select the required access-key length, then enter a key with exactly that many Unicode characters. New file encryption enforces this length; decryption does not.
+1. Select the required main Access-key length, then enter a key with exactly that many Unicode code points. New file encryption enforces this length; decryption does not. This main key and its length setting do not apply to the media/file payload workspace.
 2. Select **Encrypt and download file** or **Decrypt and download file**. File operations always use chunked AES-256-GCM and the access key, regardless of the selected text method.
 3. Share the encrypted file and access key separately. Decrypted files are sensitive. The app does not preserve the original filename or MIME type.
 
@@ -285,7 +287,7 @@ For short messages where only the recipient private key is needed, **RSA-OAEP ·
 2. Select an encryption method.
 3. For AES-GCM, choose an enabled 128-, 192-, or 256-bit option — this sets the derived AES key size, not passphrase length. AES-192 is enabled only when the browser's Web Crypto API confirms support. For AES-CBC + HMAC, use a long passphrase. For an RSA method, paste and verify a recipient public-key fingerprint, or generate a key pair (choose the generated RSA key size before generating). RSA3 dual-key encryption also requires a shared access-key passphrase.
 4. Enter the message and select **Encrypt message**. The result is a token with a method-specific prefix. Share the encrypted token and the required passphrase or key instructions through appropriate, separate channels.
-5. To decrypt, paste the complete token and provide the matching passphrase or private key. The app recognizes `CT2.`, older `CT1.`, `CBC1.`, `RSA1.`, `RSA2.`, and `RSA3.` text tokens and selects the corresponding method automatically. `RSA3.` decryption requires both the passphrase and the matching RSA private key.
+5. To decrypt, paste the complete token and provide the matching passphrase or private key. The app recognizes `CT2.`, older `CT1.`, new `CBC2.`, legacy `CBC1.`, `RSA1.`, `RSA2.`, and `RSA3.` text tokens and selects the corresponding method automatically. `RSA3.` decryption requires both the passphrase and the matching RSA private key.
 6. Use the file controls to encrypt or decrypt a file with the access key — file operations always use AES-256-GCM.
 
 Grumpy v2 messages do not use the modern token prefixes. Select the legacy method to decrypt old-format text. After successful decryption, **Prepare AES-256-GCM migration** moves the plaintext into the message field and clears the old access key. Enter a new strong passphrase and encrypt to create a modern `CT2.` token. This does not make the old ciphertext or its copies secure — remove or replace them where practical.
@@ -301,7 +303,7 @@ Grumpy v2 messages do not use the modern token prefixes. Select the legacy metho
 
 Message encryption/decryption, file encryption/decryption, and RSA key generation run as one operation at a time. While an operation is pending, the app disables the related controls—including keys, method and key-size selectors, source text, file selection, and key actions—so the inputs cannot change underneath it. Repeated clicks or keyboard shortcuts do not start another operation. File progress and operation status remain visible to assistive technology.
 
-Use **Clear** when you want to remove the current message, result, selected encryption/hash/payload files and carrier, hash results, and file status while continuing to use the main Access key or loaded RSA/ECDSA keys. It also clears the optional media-workspace key and disables that separate-key option. Clearing the hash panel invalidates any in-progress calculation so it cannot repopulate results afterward. Editing the message or access key, changing an encryption method or key size, or editing RSA key material clears the displayed message result and disables its download action. This prevents a result encrypted with previous inputs from appearing current. Clear does not cancel a pending encryption operation, erase the main Access key or private keys, remove a downloaded file, or securely wipe browser memory. The privacy lock clears sensitive fields, all active access keys and private keys, selected files and hash results, invalidates pending UI and hash results, and requires an explicit fresh-workspace resume. Do not rely on it as authentication or guaranteed secure erasure.
+Use **Clear** when you want to remove the current message, result, selected encryption/hash/payload files and carrier, hash results, and file status while continuing to use the main Access key or loaded RSA/ECDSA keys. It also clears the media-workspace access key. Clearing the hash panel invalidates any in-progress calculation so it cannot repopulate results afterward. Editing the message or access key, changing an encryption method or key size, or editing RSA key material clears the displayed message result and disables its download action. This prevents a result encrypted with previous inputs from appearing current. Clear does not cancel a pending encryption operation, erase the main Access key or private keys, remove a downloaded file, or securely wipe browser memory. The privacy lock clears sensitive fields, all active access keys and private keys, selected files and hash results, invalidates pending UI and hash results, and requires an explicit fresh-workspace resume. Do not rely on it as authentication or guaranteed secure erasure.
 
 ## Browser support and accessibility
 
@@ -316,12 +318,13 @@ The responsive interface uses the logo's violet and near-black palette, with a t
 | Plaintext message | 100,000 UTF-8 bytes |
 | Encrypted text token | 140,000 characters |
 | Signed text token (`SIG1.` envelope) | 200,000 characters |
-| New password-based encryption access key | Exactly the selected 16, 20, 24, 32, 40, or 64 Unicode code points; at most 4,096 UTF-8 bytes |
+| Main Access key for new password-based message and file encryption | Exactly the selected 16, 20, 24, 32, 40, or 64 Unicode code points; at most 4,096 UTF-8 bytes |
+| Media/file payload workspace access key | At least 10 Unicode code points; at most 4,096 UTF-8 bytes. Its generator target does not constrain manual keys. |
 | RSA or ECDSA PEM key input | 20,000 characters |
 | New file plaintext | 1 GiB |
 | Embedded payload plaintext | 4 MiB; text, one original-format file, or multiple files/folder packaged as an uncompressed ZIP |
 | Source carrier image | JPEG or PNG; 16 megapixels; each side at most 16,384 pixels; 32 MiB |
-| Carrier output | PNG for image carriers; other files have an encrypted block appended; select the exact output for extraction |
+| Carrier output | PNG for image carriers; PDFs contain a native encrypted attachment; other files have an encrypted block appended; select the exact output for extraction |
 | Files in a collection or folder ZIP | 1,000 |
 | File hashing | 256 MiB per file; SHA digests require full-file memory, MD5 is incremental; calculation runs in a Web Worker |
 | Earlier HWF1 file plaintext | 1 MiB |
@@ -332,7 +335,7 @@ Inputs are validated before cryptographic processing where practical. Authentica
 
 ## Privacy and workspace lock
 
-The app does not intentionally transmit message contents, files, passphrases, or private keys to an application server. It does not persist them in `localStorage`, `sessionStorage`, `IndexedDB`, or cookies. The optional separate media-workspace key is cleared by **Clear** and by the privacy lock; the main Access key is retained by **Clear** but cleared by the lock. Cryptographic operations use the browser's Web Crypto API. A deployed website still supplies the HTML, scripts, styles, and images — a compromised hosting origin can deliver code that reads data before encryption or after decryption.
+The app does not intentionally transmit message contents, files, passphrases, or private keys to an application server. It does not persist them in `localStorage`, `sessionStorage`, `IndexedDB`, or cookies. The dedicated media-workspace key is cleared by **Clear** and by the privacy lock; the main Access key is retained by **Clear** but cleared by the lock. Cryptographic operations use the browser's Web Crypto API. A deployed website still supplies the HTML, scripts, styles, and images — a compromised hosting origin can deliver code that reads data before encryption or after decryption.
 
 After five minutes without a tracked interaction, or when a page-lifecycle `pagehide` event occurs, the workspace locks. Sensitive message and result fields, passphrases, private keys, selected files, and hash results are cleared; narration stops; in-progress UI/hash results are invalidated; controls are disabled until the user explicitly resumes with a fresh workspace. The RSA public key is retained. Switching tabs alone does not necessarily trigger the lock. The lock has no password, is not an authentication boundary, and cannot guarantee secure erasure from browser memory.
 
@@ -352,7 +355,7 @@ python -m http.server 8000
 
 Then open <http://localhost:8000/>. Any static HTTP server that serves the project files from their existing relative paths will work.
 
-The project has no `package.json`, runtime package installation, bundler, build step, database, or application server. Node.js is needed only if you want to run the automated tests.
+The static app has no runtime package installation, bundler, build step, database, or application server. `package.json` and `package-lock.json` pin `pdf-lib` for the Node PDF attachment tests; the browser instead imports the bundled `js/vendor/pdf-lib.esm.min.js`. Install test dependencies only when you plan to run the test suite.
 
 ### Static hosting
 
@@ -368,37 +371,40 @@ The page includes a restrictive CSP meta policy. The root [`_headers`](../_heade
 
 ## Tests
 
-The project uses Node.js's built-in test runner and has no test-framework dependency. From the project directory, run:
+The project uses Node.js's built-in test runner, with the pinned `pdf-lib` package required by the PDF tests. From the repository root, install the lockfile dependencies and run:
 
 ```sh
+npm ci
 node --test
 ```
 
-Run this from the repository root. Node.js automatically discovers the test files, so the command works across Windows, macOS, and Linux without shell-specific path separators or wildcard expansion.
+Node.js automatically discovers the test files, so `node --test` works across Windows, macOS, and Linux without shell-specific path separators or wildcard expansion. The app itself does not require npm or Node.js to run.
 
-The suite covers AES-GCM key sizes and browser capability detection, legacy tokens, CBC-HMAC, direct RSA, standard AES-GCM + RSA-OAEP hybrid encryption, RSA-first dual-key encryption, RSA and ECDSA key generation/import/validation, signed-token creation and verification, passphrase generation and estimation, file-hash comparison and CSV export, Grumpy v2 compatibility, HWF1/HWF2 file encryption, PNG pixel embedding/extraction, ZIP creation and CRC handling, tampering and malformed inputs, safe error behavior, local-processing policies, UI wiring, narration, and workspace locking. File-format tests include truncated ciphertext, swapped authenticated chunks, and a modified HWF2 header length. Passing tests establish expected behavior for tested cases; they are not a substitute for browser testing or an independent cryptographic audit.
+The suite covers AES-GCM key sizes and browser capability detection, legacy tokens, CBC-HMAC, direct RSA, standard AES-GCM + RSA-OAEP hybrid encryption, RSA-first dual-key encryption, RSA and ECDSA key generation/import/validation, signed-token creation and verification, passphrase generation and estimation, file-hash comparison and CSV export, Grumpy v2 compatibility, HWF1/HWF2 file encryption, PNG pixel embedding/extraction, PDF attachment embedding/extraction, ZIP creation and CRC handling, tampering and malformed inputs, safe error behavior, local-processing policies, UI wiring, narration, and workspace locking. File-format tests include truncated ciphertext, swapped authenticated chunks, and a modified HWF2 header length. Passing tests establish expected behavior for tested cases; they are not a substitute for browser testing or an independent cryptographic audit.
 
 ### Browser smoke-test checklist
 
 Use a current browser on `localhost` or HTTPS. Keep any sample keys and passphrases temporary and do not use production secrets for testing.
 
-1. Check the AES-GCM key-size selector after startup. In a browser that does not support AES-192-GCM, confirm the option is disabled with an explanatory hint; in a compatible browser, confirm it becomes selectable. In either case, test AES-128 and AES-256 message encryption/decryption, then encrypt/decrypt an empty message and a Unicode message with AES-GCM (`CT2.`) and CBC-HMAC (`CBC1.`). Confirm each token decrypts with the correct passphrase and that a wrong passphrase, modified token, and malformed token fail without displaying plaintext.
+1. Check the AES-GCM key-size selector after startup. In a browser that does not support AES-192-GCM, confirm the option is disabled with an explanatory hint; in a compatible browser, confirm it becomes selectable. In either case, test AES-128 and AES-256 message encryption/decryption, then encrypt/decrypt an empty message and a Unicode message with AES-GCM (`CT2.`) and CBC-HMAC (`CBC2.`). Confirm legacy CBC1 tokens still decrypt, and that a wrong passphrase, modified token, and malformed token fail without displaying plaintext.
 2. Generate an RSA key pair and confirm the displayed SHA-256 fingerprint. For exportable keys, export and re-import the public/private PEM pair and confirm the fingerprint is unchanged. Test RSA1 hybrid, RSA2 direct, and RSA3 dual-key round trips. Confirm RSA2 and RSA3 enforce the selected key's short-message byte limit, and that RSA3 fails with a wrong passphrase or mismatched private key.
 3. Encrypt and decrypt empty, small, and multi-chunk files. Compare the original and recovered bytes; also try a wrong passphrase and a modified or truncated encrypted file. For a large file saved through the Save File picker, tamper with a later encrypted chunk after earlier chunks have authenticated; confirm the operation fails, no success result is reported, and the uncommitted output is aborted. If cleanup itself fails, confirm the UI explicitly says not to use the partial file and to remove it. Without the picker, confirm a failed operation does not trigger a download.
-4. Hide a short Unicode text and a small binary file in a PNG, then extract each with the same access key and compare bytes. Confirm a wrong key, non-carrier PNG, or modified hidden image does not produce a download. Verify that resizing or re-encoding the output is documented as unsupported.
+4. Hide a short Unicode text and a small binary file in a PNG using the dedicated workspace key, then extract each with that same key and compare bytes. Confirm the main Access key is not used, a key under 10 Unicode code points is rejected, and a manual key of at least 10 characters works even when it differs from the selected generator target. Also confirm a wrong key, non-carrier PNG, or modified hidden image does not produce a download. Verify that resizing or re-encoding the output is documented as unsupported.
+   Also embed and extract a small payload with an unencrypted PDF. Confirm the generated PDF opens with its pages intact and the payload is recovered through the app; attachment visibility varies by PDF reader. Confirm encrypted PDFs and out-of-limit input/output sizes are rejected, and treat PDF digital signatures as potentially invalidated by rewriting.
+   Embed and extract a small payload from sample audio and video files, compare the recovered bytes, and confirm the original carrier is unchanged. This verifies byte-level round-tripping, not playback. Appended data can affect compatibility, and the app's CSP blocks in-page media playback; use an external player to assess playback if needed.
 5. Select one file and confirm it is recovered in its original format. Select multiple files, a folder, or both and confirm extraction downloads a ZIP with contents and relative paths intact. Check that choosing text alongside files is rejected without clearing either selection, and an over-capacity payload produces a clear error without a download.
-6. Generate passphrases at several lengths, confirm they populate the access-key box and the rough strength estimate updates, and check that repeated or short inputs are not described as strong. The generated value must not appear in browser storage.
+6. Generate passphrases at several lengths in both key areas and confirm the generated values populate the corresponding access-key fields and the rough strength estimate updates. In the main Access-key area, confirm the selected length is enforced for new password-based encryption. In the media/file payload workspace, confirm the selected length is only a generator target and a manually entered key of at least 10 Unicode code points is accepted regardless of that target. Check that repeated or short inputs are not described as strong; generated values must not appear in browser storage.
 7. Hash a small known file with MD5, SHA-256, and SHA-512 and compare with known reference digests. Enter the correct expected digest and confirm **Match**, then change one digit and confirm **Mismatch**. Also check invalid digest length/characters, and confirm the expected algorithm is calculated even when its checkbox is cleared. Prefer trusted expected digests and SHA-256 or SHA-512. If practical, hash a file near the 256 MiB limit with MD5 only and confirm progress remains responsive; do not expect SHA hashing to stream because Web Crypto requires the complete file buffer.
 8. Generate an exportable ECDSA P-256 key pair for a deliberate signing-key backup, sign an encrypted sample message, and confirm it produces a `SIG1.` token. Verify it with the public key, change the token or use another public key and confirm verification fails, then decrypt the valid signed token and confirm signature verification happens before decryption. Compare the complete public-key fingerprint through a separate trusted channel. Substitute a different valid P-256 public key and confirm signing is refused, the error explains the mismatch, no signed result is output, and download remains disabled. Also try malformed public-key PEM for both verify-only and signed decryption, plus a valid signature with an incorrect decryption key; confirm each produces a distinct, accurate status.
 9. Select Grumpy v2 only to check legacy compatibility; if testing encryption, confirm the output can be decrypted with the same key and that the UI warns the result is unsafe. Confirm the migration action moves successfully decrypted text back to the message field so it can be protected with AES-GCM.
 10. Start a password-based, RSA, ECDSA, or steganography operation and verify relevant inputs and actions remain disabled while it is pending and become available afterward. Confirm editing the message or key, changing the method or key size, or changing RSA/ECDSA key material clears the previous output and disables its download action. Trigger the privacy lock during work, if practical, and confirm stale results are not restored when the workspace resumes.
-11. Verify the keyboard shortcuts and visible status messages. If speech synthesis is supported, confirm enabling narration and opening dropdowns stay quiet, changing the narration language, encryption method, AES/RSA key size, or hash algorithm announces the new selection, and the payload workspace announces carrier/mode/key-source changes and operation outcomes without speaking key contents. Confirm legacy encryption completion warns that Grumpy v2 is unsafe and the direct-RSA message limit matches the selected generated-key size. Selecting **Clear** should remove message, file, payload, and hash selections/results, clear the separate media-workspace key and disable its option, while retaining the main Access key and loaded RSA/ECDSA keys.
+11. Verify the keyboard shortcuts and visible status messages. If speech synthesis is supported, confirm enabling narration and opening dropdowns stay quiet, changing the narration language, encryption method, AES/RSA key size, or hash algorithm announces the new selection, and the payload workspace announces carrier/mode changes and operation outcomes without speaking key contents. Confirm legacy encryption completion warns that Grumpy v2 is unsafe and the direct-RSA message limit matches the selected generated-key size. Selecting **Clear** should remove message, file, payload, and hash selections/results and clear the dedicated media-workspace key, while retaining the main Access key and loaded RSA/ECDSA keys.
 
 ### Troubleshooting
 
 - **Web Crypto is unavailable:** open the app from `localhost` or an HTTPS origin in a supported browser.
 - **AES-192 is disabled:** this browser's Web Crypto API rejected or could not confirm AES-192-GCM support. Use AES-128 or AES-256 for new messages, or open an existing AES-192 token in a browser that supports that key size. AES-192 encryption is covered by Node tests, but that does not establish browser support.
-- **A password-based operation rejects the key:** check that it is the same passphrase used for encryption, and that it meets the minimum and maximum limits. For authenticated formats, a wrong key and a modified token both cause decryption to fail.
+- **A password-based operation rejects the key:** check that it is the same passphrase used for encryption and that it meets the relevant limits. New main-key message/file encryption requires the exact selected length; the media/file payload workspace requires its own key of at least 10 Unicode code points. Both key paths have a 4,096 UTF-8-byte maximum. For authenticated formats, a wrong key and a modified token both cause decryption to fail.
 - **Authenticated decryption fails:** AES-GCM, CBC-HMAC, RSA, and HWF1/HWF2 file authentication failures use the same internal `auth` error code. User-facing failures are generic and contextual (message versus file); they do not say whether the key was wrong or authenticated data was altered. Malformed format and actionable size-limit errors remain distinct internally but are not exposed as key-oracle details in the UI. Grumpy v2 is unauthenticated and cannot reliably detect an incorrect key.
 - **File decryption reports a save/write failure:** this is an output I/O problem, not evidence of an incorrect key. Check available disk space and permissions, choose another save location if available, and retry. Cancelling the save picker is reported separately.
 - **RSA decryption fails:** confirm that the token format matches the operation and that the private key belongs to the public key used for encryption. Compare public-key fingerprints out of band before encrypting.
@@ -410,6 +416,8 @@ Use a current browser on `localhost` or HTTPS. Keep any sample keys and passphra
 
 ```text
 index.html                     Application markup and CSP meta policy
+package.json                   Pinned pdf-lib dependency for PDF tests
+package-lock.json              Reproducible test dependency lockfile
 css/
   styles.css                   Responsive violet enterprise theme, focus and status styling
 js/
@@ -420,11 +428,15 @@ js/
   passphrase.mjs               Passphrase generation and strength estimate
   hashing.mjs                  Worker-safe MD5 and Web Crypto digest implementation, plus hash-size limit
   steganography.mjs            PNG RGB least-significant-bit payload framing
+  pdf-attachments.mjs          PDF EmbeddedFile attachment embed/extract handling
   stego-archive.mjs            Dependency-free ZIP Store archive builder for folders
   hash-worker.mjs              Off-main-thread file reading and digest calculation
   hash-results.mjs             Hash CSV serialization and spreadsheet-safety handling
   hash-verification.mjs        Expected-digest validation and comparison
   session-lock.mjs             Testable inactivity timer
+  vendor/
+    pdf-lib.esm.min.js         Locally bundled PDF library for browser runtime
+    pdf-lib.LICENSE.md         MIT license notice for bundled library
   crypto/
     aes-gcm.mjs                AES-GCM text encryption and CT1 compatibility
     aes-cbc-hmac.mjs           CBC compatibility with encrypt-then-MAC
@@ -448,21 +460,24 @@ tests/
   passphrase-hash.test.mjs     Passphrase and file-hash tests
   errors.test.mjs              Error mapping and safe diagnostics
   security-config.test.mjs     CSP, local-processing, and UI policy tests
+  pdf-attachments.test.mjs     PDF attachment round-trip, validation, and bounds
+  steganography.test.mjs       PNG and appended-carrier framing tests
   session-lock.test.mjs        Inactivity timer tests
   workspace-lock-ui.test.mjs   Workspace lock integration tests
 ```
 
 ## Implementation overview
 
-Hex Watch Cipher is a static web application: the browser loads `index.html`, its local stylesheet, the JavaScript modules, and the local logo assets. The application does not require a runtime package manager, build step, database, API server, or account service. The browser's Web Crypto API provides the modern encryption primitives; `js/crypto/legacy.mjs` is intentionally isolated as an insecure compatibility implementation for old Grumpy v2 messages.
+Hex Watch Cipher is a static web application: the browser loads `index.html`, its local stylesheet, JavaScript modules, bundled PDF library, and local logo assets. The application does not require a runtime package manager, build step, database, API server, or account service. The browser's Web Crypto API provides the modern encryption primitives; `js/crypto/legacy.mjs` is intentionally isolated as an insecure compatibility implementation for old Grumpy v2 messages. `pdf-lib` is bundled for browser use and pinned in the npm manifests for PDF unit tests.
 
 - `index.html` defines the workspace, controls, accessible status regions, and restrictive Content Security Policy meta policy.
 - `css/styles.css` contains the responsive layout, brand-aligned violet appearance, interaction states, and reduced-motion support.
 - `js/app.js` connects controls to encryption, decryption, file operations, hashing, narration, downloads, and privacy locking.
-- `js/steganography.mjs` handles PNG pixel payloads and appended-carrier framing; `js/stego-archive.mjs` packages multi-file and folder payloads into ZIP archives.
+- `js/steganography.mjs` handles PNG pixel payloads and appended-carrier framing; `js/pdf-attachments.mjs` handles native PDF EmbeddedFile attachments; `js/stego-archive.mjs` packages multi-file and folder payloads into ZIP archives.
 - `js/crypto/` contains focused AES, RSA, ECDSA-signature, file-encryption, and legacy implementations plus shared format, encoding, and input-limit helpers. `js/passphrase.mjs` and the hash modules provide non-cryptographic generation guidance, digest comparison, and safe report export.
 - `js/ui/` contains narration and workspace-lock behavior; the lock timer is separately testable in `js/session-lock.mjs`.
-- `tests/` uses Node.js's built-in test runner to cover crypto formats, malformed inputs, signature/key pairing, passphrase and hash behavior, user-facing errors, security policy, UI behavior, narration, and the workspace lock.
+- `js/vendor/pdf-lib.esm.min.js` is the locally served PDF library, with its MIT license notice alongside it. Browser use does not fetch the library from a third-party host.
+- `tests/` uses Node.js's built-in test runner and the pinned `pdf-lib` package to cover crypto formats, malformed inputs, PDF attachment behavior, signature/key pairing, passphrase and hash behavior, user-facing errors, security policy, UI behavior, narration, and the workspace lock.
 
 Keep security-sensitive behavior in the relevant modules rather than adding inline scripts or remote dependencies. Any change to token formats, algorithms, key derivation, authenticated data, or file framing should update the related tests and documentation together. Run the automated suite and perform browser smoke tests after changes; tests do not establish that a design is secure or independently audited.
 
