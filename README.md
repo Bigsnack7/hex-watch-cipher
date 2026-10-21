@@ -4,165 +4,412 @@
 
 <h1 align="center">Hex Watch Cipher</h1>
 
-> **What it is:** A static browser-based workspace for encrypting messages and files, carrying encrypted payloads in media and documents, and checking file digests.<br>
-> **What it demonstrates:** Practical cryptography with the Web Crypto API, accessible interface design, and secure client-side engineering.<br>
-> **Key design decisions:** Keep sensitive operations on-device, use authenticated encryption by default, avoid a backend and network-loaded runtime dependencies, and clearly mark legacy or limited methods.
-
 <p align="center">
-  <img alt="No backend" src="https://img.shields.io/badge/backend-none-brightgreen.svg" />
-  <img alt="Bundled PDF support" src="https://img.shields.io/badge/PDF%20support-pdf--lib%20bundled-blue.svg" />
-  <img alt="Web Crypto API" src="https://img.shields.io/badge/crypto-Web%20Crypto%20API-orange.svg" />
+  <strong>A Browser-Based Encryption & File Security Workspace</strong>
 </p>
 
-## At a glance
+<p align="center">
+  Built with the Web Crypto API to demonstrate practical cryptography, secure client-side engineering, and file integrity verification.
+</p>
 
-- **Encrypt text locally:** AES-GCM for passphrase-based messages, RSA-OAEP hybrid for recipients, plus clearly limited compatibility modes.
-- **Protect files:** Chunked AES-256-GCM file encryption supports files up to 1 GiB.
-- **Carry encrypted payloads in media and files:** PNG supports pixel embedding (JPEG sources become PNG); PDFs receive a standard encrypted attachment and remain PDFs; video, audio, and other non-PDF files receive an appended encrypted block. Only PNG pixel embedding is concealment, and it is fragile.
-- **Check file integrity:** Calculate and compare local MD5, SHA-1, SHA-256, or SHA-512 digests; export results as CSV.
-- **Verify signed messages:** Optionally sign encrypted tokens with ECDSA P-256 and verify a signature before decryption.
-- **Manage keys deliberately:** Generate RSA encryption and ECDSA signing keys, inspect public-key fingerprints, and choose non-extractable memory-only keys or explicit PEM backups.
-- **Get usable guidance:** Generate passphrases, enforce the selected length for new password-based message and file encryption, view a rough quality estimate (not an audit), and optionally hear multilingual narration. The media/file payload workspace has a separate required key; its length selector sets only the generated-passphrase target.
-- **Handle legacy data:** Decrypt supported older formats and migrate Grumpy v2 messages. Grumpy v2 is insecure and is for compatibility only.
+<p align="center">
+  <a href="https://aecfe6fc.hexwatch.pages.dev">
+    <img src="https://img.shields.io/badge/🚀_Live_Demo-Try_Hex_Watch_Cipher-7C3AED?style=for-the-badge" alt="Try the live demo" />
+  </a>
+</p>
 
-> [!CAUTION]
-> Use AES-GCM for new passphrase-protected messages or verified RSA hybrid encryption for a recipient. Direct RSA is only for very short messages. Never use Grumpy v2 to protect sensitive information. Client-side encryption cannot protect data from a compromised device, browser, application code, or hosting origin.
+<p align="center">
+  <a href="https://github.com/Bigsnack7/hex-watch-cipher">Source Code</a>
+  ·
+  <a href="docs/PROJECT_GUIDE.md">Project Guide</a>
+  ·
+  <a href="https://github.com/Bigsnack7">GitHub Profile</a>
+</p>
 
-## Try it locally
+<p align="center">
+  <img alt="Application backend" src="https://img.shields.io/badge/Application%20Backend-None-brightgreen.svg" />
+  <img alt="Cryptography" src="https://img.shields.io/badge/Cryptography-Web%20Crypto%20API-orange.svg" />
+  <img alt="PDF support" src="https://img.shields.io/badge/PDF%20Support-Bundled%20pdf--lib-blue.svg" />
+  <img alt="Platform" src="https://img.shields.io/badge/Platform-Web%20Browser-4285F4.svg" />
+</p>
 
-No package installation or build step is needed to run the app. Web Crypto generally requires `localhost` or HTTPS; directly opening the page as a `file://` URL may not work. PDF support loads a locally bundled library file, not a third-party network service.
+---
 
-```sh
+## Overview
+
+**Hex Watch Cipher** is a browser-based encryption and file-security application designed to explore practical cryptography, secure data handling, and client-side security engineering.
+
+The application allows users to encrypt messages and files, verify file digests, generate and manage cryptographic keys, sign encrypted messages, and carry encrypted payloads inside supported media and document formats.
+
+The application performs its cryptographic operations locally in the browser without intentionally sending messages, files, access keys, or private keys to an application backend.
+
+### Design principles
+
+- **Client-side processing:** Sensitive operations are performed in the browser.
+- **Authenticated encryption:** AES-GCM is the recommended default for new passphrase-protected messages and file encryption.
+- **Explicit security boundaries:** Legacy methods, compatibility limitations, and security trade-offs are documented.
+- **Local runtime dependencies:** PDF support uses a bundled `pdf-lib` library rather than fetching a third-party library at runtime.
+- **Practical security engineering:** The project includes automated tests, input validation, error handling, key-management workflows, and privacy-conscious interface behavior.
+
+> **Live demo:** [Open Hex Watch Cipher](https://aecfe6fc.hexwatch.pages.dev)
+
+> **Security note:** This is a temporary Cloudflare Pages deployment. Use HTTPS on an origin you trust. Client-side encryption cannot protect secrets from compromised devices, malicious browser extensions, compromised application code, or a compromised hosting origin.
+
+---
+
+## Table of Contents
+
+- [Features at a Glance](#features-at-a-glance)
+- [Encryption Methods](#encryption-methods)
+- [Key Management](#key-management)
+- [File Encryption and Integrity Verification](#file-encryption-and-integrity-verification)
+- [Encrypted Payload Embedding](#encrypted-payload-embedding)
+- [Digital Signatures](#digital-signatures)
+- [Privacy and Security](#privacy-and-security)
+- [Running Locally](#running-locally)
+- [Testing](#testing)
+- [Technical Limits](#technical-limits)
+- [Documentation](#documentation)
+- [Security Scope](#security-scope)
+- [Author](#author)
+
+---
+
+## Features at a Glance
+
+| Feature | Description |
+|---|---|
+| Message encryption | AES-GCM, AES-CBC + HMAC compatibility mode, and RSA-OAEP-based encryption workflows |
+| File encryption | Chunked AES-256-GCM encryption for files up to 1 GiB |
+| Hybrid encryption | AES-GCM combined with RSA-OAEP for recipient-based encryption |
+| Digital signatures | ECDSA P-256 signatures for supported encrypted message tokens |
+| File integrity | MD5, SHA-1, SHA-256, and SHA-512 digest calculation and comparison |
+| Encrypted payload embedding | Carry encrypted payloads in PNG images, PDFs, audio, video, and other supported files |
+| Key management | RSA encryption keys, ECDSA signing keys, public-key fingerprints, and optional PEM backups |
+| Passphrase generation | Cryptographically random passphrase generation and a basic quality estimate |
+| Workspace privacy | Inactivity-based clearing of sensitive interface state |
+| Multilingual narration | Optional browser speech synthesis in English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, and French |
+| Automated testing | Tests covering cryptographic formats, tampering, hashing, PDF attachments, and application behavior |
+
+---
+
+## Encryption Methods
+
+Hex Watch Cipher supports several encryption formats for different use cases.
+
+| Method | Token format | Purpose |
+|---|---|---|
+| AES-GCM | `CT2.` | Recommended for new passphrase-protected messages |
+| AES-CBC + HMAC | `CBC2.` | Authenticated compatibility mode; also decrypts `CBC1.` |
+| RSA-OAEP + AES-GCM | `RSA1.` | Hybrid encryption for ordinary-length messages sent to a recipient |
+| RSA-OAEP + AES-GCM | `RSA3.` | Dual-key workflow requiring a recipient's RSA private key and a shared access key |
+| Direct RSA-OAEP | `RSA2.` | Very short messages only |
+| Legacy Grumpy v2 | Legacy format | Compatibility and testing only; not suitable for sensitive information |
+
+### Cryptographic implementation
+
+- AES-GCM provides authenticated encryption.
+- RSA-OAEP wraps a randomly generated AES key in the hybrid encryption workflow.
+- Password-based AES and RSA3 key derivation use PBKDF2-HMAC-SHA-256 with 600,000 iterations and a random salt.
+- CBC compatibility tokens use encrypt-then-MAC authentication.
+- New CBC2 tokens use HKDF-SHA-256 for key separation after PBKDF2-based derivation.
+- Older `CT1.` message tokens and `HWF1.` file formats remain supported for compatibility.
+
+**Recommendation:** Use AES-GCM for new passphrase-protected messages or RSA hybrid encryption when sending messages to a recipient. Avoid legacy Grumpy v2 for sensitive information.
+
+---
+
+## Key Management
+
+The application provides tools for generating and managing cryptographic keys and access phrases.
+
+### Access keys
+
+- Supports selected lengths of 16, 20, 24, 32, 40, or 64 Unicode code points for new password-based message and file encryption.
+- Uses browser cryptographic randomness for generated passphrases.
+- Applies a maximum of 4,096 UTF-8 bytes to access keys.
+- Uses a separate workspace access key for encrypted payload embedding.
+- Does not save generated passphrases for later recovery.
+
+### RSA and ECDSA keys
+
+- Generate RSA encryption keys and ECDSA P-256 signing keys.
+- Inspect public-key fingerprints.
+- Keep generated private keys non-extractable and in page memory by default.
+- Export PEM backups when explicitly requested during key generation.
+
+Private-key backups must be protected carefully. A valid signature proves possession of the corresponding signing key; it does not independently prove the real-world identity of the sender.
+
+---
+
+## File Encryption and Integrity Verification
+
+### File encryption
+
+The file-encryption workspace uses chunked AES-256-GCM encryption.
+
+- Supports new file encryption up to **1 GiB**.
+- Processes files in authenticated 4 MiB chunks.
+- Uses the `HWF2` format for new encrypted files.
+- Retains decryption support for older `HWF1` files up to 1 MiB.
+- Avoids including original filenames and MIME types in the encrypted file format.
+- Supports incremental saving through the File System Access API where available.
+
+### File hashing
+
+The hash workbench supports:
+
+| Algorithm | Intended use |
+|---|---|
+| MD5 | Compatibility checks only |
+| SHA-1 | Compatibility checks only |
+| SHA-256 | Recommended for integrity comparisons |
+| SHA-512 | Recommended for integrity comparisons |
+
+Additional capabilities include:
+
+- File selection and drag-and-drop.
+- Expected-digest comparison with Match or Mismatch results.
+- CSV export of digest reports.
+- Background hashing using a same-origin Web Worker.
+- Incremental MD5 processing to reduce memory use.
+
+**Important:** A matching digest establishes equality between the calculated and expected values. It does not establish authenticity unless the expected digest comes from a trusted source.
+
+---
+
+## Encrypted Payload Embedding
+
+The Media & File Payload Workspace carries encrypted payloads in supported files.
+
+Payloads use authenticated AES-256-GCM encryption and a dedicated workspace access key.
+
+| Carrier | Implementation | Important limitation |
+|---|---|---|
+| PNG | Embeds encrypted bytes in RGB least-significant bits of fully opaque pixels | Fragile concealment; image transformations may destroy the payload |
+| JPEG | Converts the image to PNG before pixel embedding | Extraction requires the generated PNG |
+| PDF | Adds an encrypted HWF2 attachment while retaining the PDF pages | Attachment visibility depends on the PDF viewer; rewriting can invalidate digital signatures |
+| Audio and video | Appends encrypted bytes and an extraction footer to a copy | Trailing data may affect playback or compatibility |
+| Other supported files | Appends encrypted payload data to a copy | This is not concealment and may affect file compatibility |
+
+### Payload handling
+
+- Supports plaintext payloads up to 4 MiB.
+- Supports a single file or a collection of files and folders.
+- Packages multiple files into an uncompressed ZIP archive.
+- Supports up to 1,000 files in a collection.
+- Requires the exact generated carrier and the correct workspace access key for extraction.
+- Processes payloads locally without intentionally uploading carriers or payloads.
+
+**Important distinction:** Embedding encrypted data in a file does not automatically make that data undetectable. PNG pixel embedding is a form of fragile concealment; PDF attachments and appended data are different mechanisms.
+
+Opening a PDF does not automatically execute an attached `.bat` or `.exe` file. The application must explicitly extract and decrypt its encrypted payload before the original file can be saved.
+
+---
+
+## Digital Signatures
+
+Hex Watch Cipher supports ECDSA P-256 digital signatures for supported encrypted message tokens.
+
+Capabilities include:
+
+- Generate or import ECDSA signing keys.
+- Sign encrypted output using ECDSA P-256 and SHA-256.
+- Wrap signed encrypted tokens in the `SIG1.` format.
+- Verify signatures before decrypting signed messages.
+- Verify a signature without decrypting the message.
+- Check that the signing private key matches the displayed public key before releasing signed output.
+
+Recipients should compare the complete SHA-256 public-key fingerprint through a separate trusted channel.
+
+Digital signatures do not encrypt messages by themselves, provide replay protection, or prevent private-key theft.
+
+---
+
+## Privacy and Security
+
+Privacy and clear security boundaries are central design considerations.
+
+### Local processing
+
+The application does not intentionally send messages, files, access keys, or private keys to an application backend or save them in browser storage.
+
+### Workspace lock
+
+The workspace lock clears sensitive fields after five minutes of tracked inactivity and during supported page lifecycle lock handling.
+
+The lock is intended to reduce casual viewing. It is not an authentication boundary and cannot guarantee secure erasure.
+
+### Error handling
+
+Authenticated decryption failures use generic errors so incorrect keys and modified ciphertext are not distinguished. File I/O and signature failures can provide separate actionable errors.
+
+### Security limitations
+
+- Compromised devices and browsers can expose information before encryption or after decryption.
+- Malicious browser extensions or compromised application code may access sensitive data.
+- The workspace lock is not a substitute for device security.
+- Digital signatures do not establish sender identity without trusted key verification.
+- File hashes do not authenticate their source.
+- The project has not been independently cryptographically audited.
+
+Use HTTPS on an origin you trust and review the application's security model before processing sensitive information.
+
+---
+
+## Running Locally
+
+Hex Watch Cipher is a static browser application and does not require a build step to run.
+
+### Requirements
+
+- A modern web browser with Web Crypto API support.
+- Python for the simple local HTTP server.
+- The project's original directory structure.
+
+### Start the application
+
+From the repository root, run:
+
+```bash
 python -m http.server 8000
 ```
 
-Open <http://localhost:8000/>.
+Open:
 
-The application page is `index.html`. Keep its sibling `css/`, `js/`, and `assets/` directories in place when serving or deploying it, including `js/vendor/pdf-lib.esm.min.js`. Cloudflare Pages deployments should include the root [`_headers`](_headers) file; it configures the security response headers, including `frame-ancestors`, which a CSP meta tag cannot enforce. Deploy a reviewed commit and verify the actual HTTPS response headers after publication.
+```text
+http://localhost:8000/
+```
 
-## Choose an encryption method
+The application entry point is `index.html`.
 
-| Method | Output | Key material | Recommended use |
-| --- | --- | --- | --- |
-| **AES-GCM · Passphrase-based** | `CT2.` | Long, unique access key | Recommended for new passphrase-protected messages. Supports 128-, 192-, or 256-bit derived AES keys when the browser's Web Crypto implementation supports the selected size; 256-bit is selected by default. |
-| **AES-CBC + HMAC · Compatibility** | `CBC2.` (decrypts `CBC1.`) | Long, unique access key | For compatibility. Encrypt-then-MAC authenticates the ciphertext; new tokens use PBKDF2-HMAC-SHA-256 followed by HKDF-SHA-256 key separation. Prefer AES-GCM for new messages. |
-| **AES-GCM + RSA-OAEP · Hybrid** | `RSA1.` | Recipient's RSA public key | Recommended for sending ordinary-length messages to a recipient. AES-GCM encrypts the message and RSA-OAEP wraps a fresh AES key. |
-| **RSA-OAEP + AES-GCM · Dual-key** | `RSA3.` | Recipient RSA public key and access key | Short messages requiring both the recipient's private key and a shared passphrase. It remains limited by RSA's short-message capacity. |
-| **RSA-OAEP · Direct** | `RSA2.` | Recipient's RSA public key | Very short messages only; the limit depends on RSA key size and UTF-8 bytes. |
-| **Grumpy v2 · Legacy only** | Legacy text | Legacy key | Selecting it requires confirmation. Compatibility and testing only; it provides no reliable confidentiality or tamper detection. Never use it for sensitive data. |
+Keep the following directories and files in place:
 
-The app also decrypts older `CT1.` AES-GCM and `HWF1.` file formats. Signed message envelopes use `SIG1.` around supported encrypted message tokens; file encryption is not signed.
+```text
+.
+├── index.html
+├── css/
+├── js/
+│   └── vendor/
+│       └── pdf-lib.esm.min.js
+├── assets/
+├── docs/
+├── _headers
+└── README.md
+```
 
-## Access keys and key sizes
+This is an illustrative overview; retain the actual files and directories present in the repository.
 
-For new AES-GCM, CBC-HMAC, RSA3, and file encryption, the main **Access key** must exactly match the selected length: 16, 20, 24, 32, 40, or 64 Unicode code points. The default is 24. It is limited to 4,096 UTF-8 bytes. Decryption does not use the currently selected length, so existing content can still be opened with its original key. RSA-only text encryption and Grumpy v2 are not subject to the selected main-key length. The media/file payload workspace does not use this main key.
+Web Crypto generally requires HTTPS or localhost. Directly opening the application through a `file://` URL may not work.
 
-**Generate secure passphrase** uses browser cryptographic randomness with rejection sampling to create a value with lowercase, uppercase, number, and symbol characters. Generated values are not saved or recoverable by the app. Store them securely before relying on them.
+### Cloudflare Pages deployment
 
-The live quality meter considers length, variety, repeated runs, and common sequences. It is a guide, not a password audit: it cannot detect reuse, breaches, personal information, or all predictable choices. Character groups are guidance, not encryption requirements. The selected length is enforced for the main Access key when starting new password-based message and file encryption. In the media/file payload workspace, **Advanced key options** are optional; its selector controls generated passphrase length only, and manually entered keys are not locked to that target. Workspace keys need at least 10 Unicode code points and are limited to 4,096 UTF-8 bytes. Prefer a long, unique generated passphrase and keep the workspace key to extract the payload later.
+The repository includes a root `_headers` file for configuring HTTP response headers.
 
-AES-GCM key-size options are the size of the derived AES key, not the passphrase length. The app checks browser support for AES-192-GCM and disables that option when Web Crypto does not support it; decryption of an existing AES-192 token may therefore require a different browser. Password-based AES and RSA3 derive keys with PBKDF2-HMAC-SHA-256 using 600,000 iterations and a random salt. AES-GCM uses authenticated encryption; a wrong key or modified token must not produce plaintext.
+After deploying a reviewed commit:
 
-## Limits at a glance
+1. Confirm that the deployment serves the correct application files.
+2. Verify the actual HTTPS response headers.
+3. Check the Content Security Policy and other security headers.
+4. Test encryption, decryption, file handling, and payload extraction in the deployed browser environment.
 
-| Item | Limit or behavior |
-| --- | --- |
-| Plaintext message | 100,000 UTF-8 bytes |
-| Encrypted text token | 140,000 characters |
-| Signed `SIG1.` token | 200,000 characters |
-| RSA/ECDSA PEM key input | 20,000 characters |
-| Main Access key for new password-based message and file encryption | Exactly the selected supported length; maximum 4,096 UTF-8 bytes |
-| Media/file payload workspace access key | At least 10 Unicode code points; maximum 4,096 UTF-8 bytes. The generator target does not constrain manual keys. |
-| New file encryption | 1 GiB plaintext maximum, processed in 4 MiB chunks |
-| File hashing | 256 MiB per file; hashing runs in a Worker; SHA digests require full-file memory and MD5 is incremental |
-| Legacy HWF1 file decryption | 1 MiB plaintext maximum |
-| Embedded payload | 4 MiB plaintext maximum; PNG/JPEG images up to 16 megapixels / 16,384 pixels per side / 32 MiB; PDFs up to 32 MiB input / 64 MiB output; other non-PDF carrier files up to 1 GiB |
-| Image payload capacity | Calculated from fully opaque PNG pixels; encryption and framing overhead also consume capacity |
-| File collections | Up to 1,000 files; multiple files and folders are packaged as an uncompressed ZIP, while a single file keeps its format |
-| Direct RSA and RSA3 | Short-message capacity depends on RSA modulus size and UTF-8 byte length |
+---
 
-Direct RSA/RSA3 generated-key limits are 190 bytes for RSA-2048, 318 bytes for RSA-3072, and 446 bytes for RSA-4096. Imported key limits are based on the actual key, not the generated-key size selector. See the guide's [limits and behavior](docs/PROJECT_GUIDE.md#limits-and-behavior) section for all details.
+## Testing
 
-## Digital signatures
+The application does not require Node.js to run, but Node.js is used for automated testing.
 
-Open **Digital signatures** to generate or paste ECDSA P-256 signing keys. Generated private keys are non-extractable and held in page memory by default. Choose **Exportable PEM** before generating a key only when a user-managed backup is needed; the private key becomes visible and must be kept secret. The setting applies to newly generated keys, not keys already in memory.
+From the repository root:
 
-When **Sign encrypted output** is enabled, the app signs only the ciphertext token—the exact serialized encrypted message and its format data, not plaintext—with ECDSA P-256 / SHA-256 and wraps it in `SIG1.`. Before releasing the signed output, the app verifies it against the displayed public key. If the signing private key and displayed public key do not match, the app refuses the output and disables its download.
-
-Recipients can choose **Verify signature only** to validate a token without decrypting it, or decrypt a signed token; signature verification happens first. The app distinguishes invalid public-key format, invalid signature, valid signature with decryption failure, and successful signed decryption. Compare the complete SHA-256 public-key fingerprint through a separate trusted channel: a valid signature proves possession of a key, not the identity of its owner. Signatures provide no replay protection—a valid signed token can be resent—and do not prevent key theft or encrypt by themselves.
-
-## File encryption and hash checks
-
-File encryption is separate from text-method selection. It always uses the access key and chunked AES-256-GCM, processing 4 MiB authenticated chunks. New files up to 1 GiB use HWF2. Earlier HWF1 files up to 1 MiB remain decryptable. Original filenames and MIME types are not included. Browsers with the File System Access save picker can save large files incrementally; other browsers may need substantial memory to prepare a download. Save-picker output is staged in a fresh transactional file and committed only after the complete operation succeeds. Failed operations abort the staged output; if the browser cannot abort it, the UI warns that any partial file must be removed and not used. Without the picker, output is held in memory and the download is created only after success.
-
-The hash workbench reads selected files in the browser and supports:
-
-| Digest | Purpose |
-| --- | --- |
-| MD5, SHA-1 | Compatibility only; not collision-resistant and not suitable for security-sensitive verification. |
-| SHA-256, SHA-512 | Recommended for integrity comparisons, provided the expected digest comes from a trusted source. |
-
-Select files by picker or drag and drop. Hashing runs in a same-origin Web Worker to keep the interface responsive. MD5 is incremental and processed in 4 MiB chunks; when it is the only selected algorithm, the Worker reads file slices instead of loading the entire file. Web Crypto SHA digests require the complete file in memory. Hashing is limited to 256 MiB per file to reduce memory pressure for SHA calculations. This hashing limit is separate from the 1 GiB file-encryption limit. MD5 runs in the Worker for compatibility but is not suitable for security-sensitive verification. Enter an expected digest to see **Match** or **Mismatch**; its algorithm is calculated even if that algorithm's output checkbox is off. A match only means the values are equal—it does not authenticate the source of the expected digest. Copy individual results or export the current report as CSV. Hashing does not encrypt, upload, or change a file.
-
-## Image, media, and file payloads
-
-In **Media & file payload workspace**, choose one carrier and exactly one payload source. All payloads use authenticated AES-256-GCM and the dedicated **Workspace access key**; the main **Access key is never used here**. Enter at least 10 Unicode code points (maximum 4,096 UTF-8 bytes), use the same key for extraction, and keep it safe. **Advanced key options** are optional: the length selector controls generated passphrases only and does not constrain a manually entered key. The key is neither stored nor spoken by narration.
-
-| Carrier | How the payload is carried | Extraction input |
-| --- | --- | --- |
-| PNG | Encrypted bytes are embedded in RGB least-significant bits of fully opaque pixels. This is fragile concealment, not a robust watermark. | The exact generated PNG |
-| JPEG | Decoded and converted to PNG; recompression would destroy pixel-embedded data. | The generated PNG, not the original JPEG |
-| PDF | Encrypted HWF2 bytes are added as a standard EmbeddedFile attachment named `hex-watch-cipher-payload.hwf2`. Pages remain in the PDF; attachment visibility varies by viewer. | The exact generated `.hidden.pdf` |
-| Video, audio, documents other than PDF, and other files | Encrypted bytes and an extraction footer are appended to a copy. This is not concealment and can affect playback or file compatibility. | The exact generated `.hidden` carrier |
-
-PDFs must be unencrypted and no larger than 32 MiB; rewritten PDF outputs are limited to 64 MiB. Rewriting can invalidate PDF digital signatures. Other non-PDF files can be up to 1 GiB. For all carrier types, plaintext payloads are limited to 4 MiB. One payload file keeps its filename and format; multiple files or a folder are packaged into a ZIP (up to 1,000 files) for you to open after extraction. Text is recovered as `hidden-message.txt`. Use a copy and do not edit or convert the generated carrier before extraction.
-
-Opening a PDF does not execute an attached `.bat` or `.exe`. The attachment contains encrypted data; this app must explicitly extract and decrypt it before the original file can be saved. Viewers differ in how they show embedded attachments. Audio, video, and other appended carriers can be extracted by this app, but trailing data may affect compatibility or playback. The app's Content Security Policy also blocks media playback inside its page; use an external player to check compatibility. Neither embedding method authenticates the sender or guarantees undetectability. All processing is local; carriers and payloads are not uploaded.
-
-The browser PDF handler uses the locally bundled `pdf-lib` 1.17.1 module; no third-party library is fetched at runtime. Its MIT license is included at [`js/vendor/pdf-lib.LICENSE.md`](./js/vendor/pdf-lib.LICENSE.md).
-
-## Workspace, narration, and privacy
-
-Only one cryptographic operation runs at a time. Relevant controls are disabled while an operation is pending. Editing message/key inputs or changing relevant methods and key sizes invalidates stale message output and its download. **Clear** removes current message and result data, selected files, hash results, and file status, but does not clear the main Access key or loaded cryptographic keys. It also clears the media-workspace access key.
-
-The optional browser speech-synthesis feature supports English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, and French. It provides selected-method, control, operation, hash, signature, and media-workspace guidance, including carrier/mode changes, workspace-key guidance, capacity, and operation outcomes. It does not read messages, keys, or decrypted output aloud. Voice availability depends on the browser and operating system.
-
-The workspace lock clears sensitive fields after five minutes of tracked inactivity and during page lifecycle lock handling. It retains the RSA public key but clears private keys and other sensitive state. The lock has no password, is not an authentication boundary, and cannot guarantee secure erasure. It is distinct from **Clear** and does not delete files already downloaded.
-
-The app does not intentionally send messages, files, access keys, or private keys to an application backend or save them in browser storage. Authenticated decrypt failures use a generic message- or file-specific failure so wrong keys and tampering are not distinguished; actionable file I/O and signature failures are reported separately. The browser still downloads the site code from its hosting origin; compromised application code, a browser extension, malware, or an unlocked device can access data before encryption or after decryption. Use HTTPS on an origin you trust.
-
-## Tests
-
-The app itself does not need npm or Node.js. To run tests, install the pinned test dependency and use Node.js from the repository root:
-
-```sh
+```bash
 npm ci
 node --test
 ```
 
-Node's built-in test runner is used without a separate test framework. The pinned `pdf-lib` package is used by PDF tests; the app itself loads the bundled browser module. Tests cover cryptographic formats, malformed and tampered input, key import/export, PDF attachment round-tripping, AES-GCM browser capability detection, passphrase estimation, hashing, safe error handling, narration and UI wiring, local-processing policy, and privacy locking. The suite is not an independent cryptographic audit; also run the browser workflows documented in the project guide.
+The test suite covers:
 
-## Detailed documentation
+- Cryptographic formats and malformed input.
+- Tampered ciphertext and decryption failures.
+- Key import and export.
+- PDF attachment round-tripping.
+- AES-GCM browser capability detection.
+- Passphrase estimation.
+- File hashing.
+- Error handling.
+- Narration and interface wiring.
+- Local-processing behavior.
+- Workspace privacy locking.
 
-The [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md) contains the full technical and operational guide, including:
+Automated tests provide evidence of expected behavior but are not an independent cryptographic audit. The documented browser workflows should also be tested.
 
-- [Encryption methods, formats, and passphrase handling](docs/PROJECT_GUIDE.md#encryption-methods)
-- [RSA keys and fingerprints](docs/PROJECT_GUIDE.md#rsa-keys-and-fingerprints)
-- [ECDSA digital signatures, matching-key checks, and verification outcomes](docs/PROJECT_GUIDE.md#digital-signatures-for-encrypted-messages)
-- [File encryption](docs/PROJECT_GUIDE.md#file-encryption) and [file hash verification](docs/PROJECT_GUIDE.md#file-hash-calculator)
-- [Media/file payload embedding, dedicated workspace key, and extraction](docs/PROJECT_GUIDE.md#image-and-media-payload-embedding)
-- [Recommended workflows, limits, and privacy behavior](docs/PROJECT_GUIDE.md#recommended-workflows)
-- [Accessibility and narration](docs/PROJECT_GUIDE.md#narration)
-- [Setup, deployment, and Cloudflare Pages](docs/PROJECT_GUIDE.md#run-and-deploy)
-- [Automated tests and browser smoke-test checklist](docs/PROJECT_GUIDE.md#tests)
-- [Troubleshooting](docs/PROJECT_GUIDE.md#troubleshooting)
-- [Architecture and implementation overview](docs/PROJECT_GUIDE.md#implementation-overview)
-- [Security model and recommended HTTP headers](docs/PROJECT_GUIDE.md#security-model-and-limitations)
+---
 
-## Security scope
+## Technical Limits
 
-This is a local encryption utility, not a secure messaging platform. Encryption does not provide forward secrecy, key recovery, or remote key backup. A signature identifies a signing key; compare its fingerprint through a trusted channel to associate it with a sender. The lock is only for reducing casual viewing. Review the [security model and limitations](docs/PROJECT_GUIDE.md#security-model-and-limitations) before using it with sensitive data.
+| Item | Limit |
+|---|---|
+| Plaintext message | 100,000 UTF-8 bytes |
+| Encrypted text token | 140,000 characters |
+| Signed `SIG1.` token | 200,000 characters |
+| RSA/ECDSA PEM input | 20,000 characters |
+| New encrypted file | 1 GiB |
+| File hashing | 256 MiB per file |
+| Legacy `HWF1` decryption | 1 MiB |
+| Embedded plaintext payload | 4 MiB |
+| PDF input for embedding | 32 MiB |
+| Rewritten PDF output | 64 MiB |
+| PNG/JPEG input for embedding | 16 megapixels, 16,384 pixels per side, and 32 MiB |
+| Other non-PDF carrier files | Up to 1 GiB |
+| File collections | Up to 1,000 files |
+
+RSA direct-encryption limits depend on the key size and message's UTF-8 byte length. Direct RSA encryption is intended for very short messages.
+
+---
+
+## Documentation
+
+The full project guide contains additional implementation details, operational guidance, troubleshooting information, and the security model.
+
+**[Read the Full Project Guide](docs/PROJECT_GUIDE.md)**
+
+Topics include:
+
+- Encryption methods and passphrase handling.
+- RSA keys and public-key fingerprints.
+- Digital signatures and verification.
+- File encryption and hash verification.
+- Media and document payload embedding.
+- Recommended workflows and limits.
+- Accessibility and narration.
+- Cloudflare Pages deployment.
+- Automated tests and browser smoke tests.
+- Architecture and implementation.
+- Security model and HTTP response headers.
+
+---
+
+## Security Scope
+
+Hex Watch Cipher is a **local encryption utility, not a secure messaging platform**.
+
+It does not provide forward secrecy, key recovery, or remote key backup. Its security depends on the integrity of the application code, hosting origin, browser, device, and key-handling practices.
+
+Review the [Security Model and Limitations](docs/PROJECT_GUIDE.md#security-model-and-limitations) before using the application with sensitive information.
+
+---
 
 ## Author
 
-**Oludemi Joshua** · [GitHub](https://github.com/Bigsnack7) · [LinkedIn](https://www.linkedin.com/in/oludemi-joshua-b6b59141b)
+**Oludemi Joshua**
+
+- GitHub: [Bigsnack7](https://github.com/Bigsnack7)
+- LinkedIn: [Oludemi Joshua](https://www.linkedin.com/in/oludemi-joshua-b6b59141b)
+- Live Demo: [Hex Watch Cipher](https://aecfe6fc.hexwatch.pages.dev)
+
+---
+
+<p align="center">
+  <strong>Hex Watch Cipher</strong>
+  <br />
+  Practical cryptography. Local processing. Transparent security boundaries.
+</p>
