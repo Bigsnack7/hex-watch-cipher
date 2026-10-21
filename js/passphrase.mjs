@@ -61,7 +61,7 @@ export function estimatePassphraseStrength(value, targetLength = 24) {
   const hasPredictableSequence = /(?:0123|1234|2345|abcd|bcde|qwer|asdf|zxcv|9876|8765|dcba)/i
     .test(normalized);
   const longestRepeatedRun = Math.max(
-    ...characters.join('').match(/(.)\1*/gu).map(run => [...run].length)
+    ...characters.join('').match(/(.)\1*/gsu).map(run => [...run].length)
   );
   const hasRepeatedPattern = Array.from(
     { length: Math.floor(characters.length / 3) },

@@ -7,9 +7,15 @@ import {
   encryptRsaThenAes, decryptRsaThenAes,
   generateRsaKeyPair, fingerprintRsaPublicKey,
   encryptGrumpyV2, decryptGrumpyV2,
-  MAX_FILE_BYTES, FILE_MAGIC, MAX_ENCRYPTED_FILE_BYTES,
+  MAX_FILE_BYTES, FILE_MAGIC, FILE_HEADER_BYTES, FILE_TAG_BYTES, FILE_CHUNK_BYTES, MAX_ENCRYPTED_FILE_BYTES,
   LEGACY_MAX_FILE_TOKEN_CHARS, encryptFileStream, decryptFileStream, decryptFileToken
 } from './crypto.mjs';
+import {
+  embedPayload, extractPayload, getStegoCapacity, readCarrierDimensions, MAX_STEGO_PIXELS,
+  MAX_STEGO_DIMENSION, MAX_STEGO_PAYLOAD_BYTES, MAX_STEGO_EMBEDDED_BYTES,
+  carrierDimensionsMatch, createAppendedPayloadFooter, extractAppendedPayload
+} from './steganography.mjs';
+import { buildZipArchive } from './stego-archive.mjs';
 import { createAudioController } from './ui/audio.mjs';
 import { createWorkspaceLock } from './ui/workspace-lock.mjs';
 import { getUserErrorMessage, logCryptoFailure } from './errors.mjs';
@@ -26,6 +32,16 @@ const inp=$('inp'),key=$('key'),out=$('out'),mode=$('mode'),status=$('status'),
   encB=$('encB'),decB=$('decB'),clrB=$('clrB'),copyB=$('copy'),
   rsaPublic=$('rsaPublic'),rsaPrivate=$('rsaPrivate'),card=$('card'),lockScreen=$('lockScreen'),
   fileInput=$('fileInput'),fileEncryptB=$('fileEncrypt'),fileDecryptB=$('fileDecrypt'),downloadTokenB=$('downloadToken'),
+  stegoCarrier=$('stegoCarrier'),stegoText=$('stegoText'),stegoFiles=$('stegoFiles'),
+  stegoFolder=$('stegoFolder'),stegoHideB=$('stegoHide'),stegoExtractB=$('stegoExtract'),
+  stegoChooseFilesB=$('stegoChooseFiles'),stegoChooseFolderB=$('stegoChooseFolder'),
+  stegoClearFilesB=$('stegoClearFiles'),stegoFilePicker=$('stegoFilePicker'),
+  stegoDropzone=$('stegoDropzone'),
+  stegoModeHideB=$('stegoModeHide'),stegoModeExtractB=$('stegoModeExtract'),
+  stegoSeparateKey=$('stegoSeparateKey'),stegoAccessKey=$('stegoAccessKey'),
+  stegoPassphraseLength=$('stegoPassphraseLength'),stegoGeneratePassphraseB=$('stegoGeneratePassphrase'),
+  stegoKeyStrengthMeter=$('stegoKeyStrengthMeter'),stegoKeyStrengthStatus=$('stegoKeyStrengthStatus'),
+  stegoKeyLengthStatus=$('stegoKeyLengthStatus'),
   hashInput=$('hashInput'),hashDropzone=$('hashDropzone'),hashSelected=$('hashSelected'),hashOutput=$('hashOutput'),
   expectedHash=$('expectedHash'),expectedHashAlgorithm=$('expectedHashAlgorithm'),
   keyStrengthMeter=$('keyStrengthMeter'),
@@ -33,10 +49,13 @@ const inp=$('inp'),key=$('key'),out=$('out'),mode=$('mode'),status=$('status'),
 const aes192Option=$('aesKeySize').querySelector('option[value="192"]');
 const aesKeySizeHint=$('aesKeySizeHint');
 const defaultAesKeySizeHint=aesKeySizeHint.textContent;
+const MAX_STEGO_IMAGE_BYTES=32*1024*1024;
+const MAX_STEGO_CARRIER_BYTES=MAX_FILE_BYTES+MAX_STEGO_EMBEDDED_BYTES+12;
 aes192Option.disabled=true;
 aesKeySizeHint.textContent='Checking whether this browser supports AES-192-GCM.';
 const subtle=window.crypto&&crypto.subtle;
-let locked=false,operationGeneration=0,operationBusy=false,hashGeneration=0;
+let locked=false,operationGeneration=0,operationBusy=false,hashGeneration=0,stegoSelectionGeneration=0;
+let stegoMode='hide',stegoCarrierCapacity=null,stegoCarrierFormat=null;
 let activeHashWorker=null,cancelActiveHash=null;
 let legacyWarningAcknowledged=false,lastSelectedMode=mode.value;
 let lastEncryptedToken=null;
@@ -52,7 +71,10 @@ const operationControls=[
   rsaPublic,rsaPrivate,$('rsaKeyMode'),$('rsaKeySize'),$('generateRsa'),
   $('copyPublic'),$('copyPrivate'),$('migrateLegacy'),fileInput,hashInput,$('exportHashResults'),
   $('signMessage'),$('signingKeyMode'),$('ecdsaPublicKey'),$('ecdsaPrivateKey'),
-  $('generateEcdsa'),$('copyEcdsaPublic'),$('copyEcdsaPrivate'),$('verifySignature')
+  $('generateEcdsa'),$('copyEcdsaPublic'),$('copyEcdsaPrivate'),$('verifySignature'),
+  stegoCarrier,stegoText,stegoFiles,stegoFolder,stegoChooseFilesB,stegoChooseFolderB,
+  stegoClearFilesB,stegoHideB,stegoExtractB,stegoModeHideB,stegoModeExtractB,
+  stegoSeparateKey,stegoAccessKey,stegoPassphraseLength,stegoGeneratePassphraseB,$('stegoAccessKeyEye')
 ];
 /* ================= UI logic ================= */
 const EMPTY='Your result will appear here.';
@@ -79,6 +101,10 @@ const MSG={auth:'Authentication failed. Check the access key or verify that the 
   toolarge:'Messages are limited to 100,000 UTF-8 bytes; encrypted tokens are limited to 140,000 characters and signed tokens to 200,000.',
   filetoolarge:'Files are limited to 1 GiB. Legacy HWF1 encrypted files are limited to 1 MiB.',
   fileformat:'This file is not a supported HWF2 encrypted file.',
+  stegoformat:'This carrier does not contain a valid Hex Watch encrypted payload.',
+  stegocapacity:'The encrypted payload does not fit in this PNG. Choose a larger PNG image or a smaller payload.',
+  stegofile:'Choose exactly one payload source and keep the payload within the 4 MiB limit.',
+  stegoimage:'Choose a valid JPEG or PNG image no larger than 16 megapixels, 16,384 pixels on either side, or 32 MiB.',
   keyweak:'RSA keys must be at least 2048 bits.',
   rsasizelimit:'RSA-first encryption supports only short messages. The limit depends on key size (190 UTF-8 bytes with RSA-2048); use AES-GCM + RSA-OAEP Hybrid for longer messages.',
   publickey:'Enter a valid RSA public key to encrypt this message.',
@@ -91,6 +117,17 @@ function updateActionButtons(){
   });
   $('exportHashResults').disabled=unavailable||!latestHashResults.length;
   fileEncryptB.disabled=fileDecryptB.disabled=locked||operationBusy||!fileInput.files.length;
+  const validPayload=estimateStegoPayload().valid;
+  const validCarrier=Boolean(stegoCarrier.files.length&&stegoCarrierCapacity!==null);
+  const stegoKey=getStegoKeySettings();
+  const validStegoKey=stegoMode==='hide'
+    ?countPassphraseCharacters(stegoKey.value)===stegoKey.requiredLength
+    :countPassphraseCharacters(stegoKey.value)>=10;
+  stegoHideB.disabled=unavailable||stegoMode!=='hide'||!validCarrier||!validPayload||!validStegoKey;
+  stegoExtractB.disabled=unavailable||stegoMode!=='extract'||!validCarrier||!validStegoKey||
+    (stegoCarrierFormat!=='png'&&stegoCarrierFormat!=='file');
+  stegoModeHideB.disabled=unavailable;
+  stegoModeExtractB.disabled=unavailable;
   downloadTokenB.disabled=locked||operationBusy||!lastEncryptedToken;
 }
 function formatHashFileSize(bytes){
@@ -210,6 +247,48 @@ function updatePassphraseStrength(){
     :'Add an access key to see an estimate.';
   $('keyStrengthGuidance').textContent=estimate?.guidance
     ||'Use a long, unique passphrase. You can type one or generate it securely.';
+}
+function updateStegoPassphraseStrength(){
+  const target=Number(stegoPassphraseLength.value);
+  const accessKey=stegoAccessKey.value.trim();
+  const actual=countPassphraseCharacters(accessKey);
+  const difference=target-actual;
+  const estimate=estimatePassphraseStrength(accessKey,target);
+  $('stegoKeyCheck-length').querySelector('span:last-child').textContent=`Exactly ${target} characters`;
+  const checklist=estimate?.checks||{
+    length:false,lowercase:false,uppercase:false,numbers:false,symbols:false
+  };
+  stegoKeyLengthStatus.textContent=!stegoAccessKey.value
+    ?`Enter ${target} characters for new payload encryption.`
+    :difference===0
+      ?`${actual}/${target} characters — selected length met.`
+      :difference>0
+        ?`${actual}/${target} characters — enter ${difference} more.`
+        :`${actual}/${target} characters — remove ${Math.abs(difference)}.`;
+  for(const [check,passed] of Object.entries(checklist)){
+    const item=$(`stegoKeyCheck-${check}`);
+    item.classList.toggle('is-met',passed);
+    item.setAttribute('aria-label',`${item.dataset.label}: ${passed?'met':'not met'}`);
+  }
+  const score=estimate?.score||0;
+  stegoKeyStrengthMeter.setAttribute('aria-valuetext',estimate?`${estimate.level} estimate, ${score} out of 100`:'No estimate');
+  stegoKeyStrengthMeter.value=score;
+  stegoKeyStrengthMeter.dataset.level=estimate?.level||'empty';
+  stegoKeyStrengthStatus.className=`key-strength-status${estimate?` ${estimate.level}`:''}`;
+  stegoKeyStrengthStatus.textContent=estimate
+    ?`${estimate.level[0].toUpperCase()}${estimate.level.slice(1)} estimate · ${score}/100`
+    :'Add an access key to see an estimate.';
+  $('stegoKeyStrengthGuidance').textContent=estimate?.guidance
+    ||'Use a long, unique passphrase. You can type one or generate it securely.';
+  updateActionButtons();
+}
+function getStegoKeySettings(){
+  const isSeparate=stegoSeparateKey.checked;
+  return {
+    value:(isSeparate?stegoAccessKey:key).value.trim(),
+    input:isSeparate?stegoAccessKey:key,
+    requiredLength:Number(isSeparate?stegoPassphraseLength.value:$('passphraseLength').value)
+  };
 }
 function accessKeyLengthError(value){
   const target=Number($('passphraseLength').value);
@@ -632,7 +711,7 @@ async function runFile(decrypting){
   }
   const password=key.value;
   if(!password){fileStatus.textContent='Enter your access key to continue.';key.focus();audio.announceStatus('fileFailed');return}
-  if(decrypting&&password.length<10){fileStatus.textContent=MSG.short;key.focus();audio.announceStatus('fileFailed');return}
+  if(decrypting&&countPassphraseCharacters(password)<10){fileStatus.textContent=MSG.short;key.focus();audio.announceStatus('fileFailed');return}
   if(!decrypting&&countPassphraseCharacters(password)!==Number($('passphraseLength').value)){
     fileStatus.textContent=accessKeyLengthError(password);
     fileStatus.classList.add('error');
@@ -753,6 +832,432 @@ async function runFile(decrypting){
     fileStatus.classList.add('error');
     audio.announceStatus(error.message==='fileio'?'fileOutputFailed':'fileFailed');
   }finally{busy(false)}
+}
+function setStegoStatus(message,isError=false,narrationEvent=''){
+  const status=$('stegoStatus');
+  status.textContent=message;
+  status.classList.toggle('error',isError);
+  if(narrationEvent)audio.announceStegoStatus(narrationEvent);
+}
+async function getStegoCarrier(file){
+  if(!(file instanceof Blob)||file.size>MAX_STEGO_CARRIER_BYTES)throw new Error('carrierlimit');
+  const header=new Uint8Array(await file.slice(0,1024*1024).arrayBuffer());
+  const pngSignature=[137,80,78,71,13,10,26,10];
+  const isPng=header.length>=8&&pngSignature.every((byte,index)=>header[index]===byte);
+  const isJpeg=header.length>=2&&header[0]===0xff&&header[1]===0xd8;
+  if(!isPng&&!isJpeg)return {bitmap:null,format:'file'};
+  if(file.size>MAX_STEGO_IMAGE_BYTES)throw new Error('image');
+  const {width,height,format}=readCarrierDimensions(header);
+  if(!width||!height||width>MAX_STEGO_DIMENSION||height>MAX_STEGO_DIMENSION||
+      width*height>MAX_STEGO_PIXELS)throw new Error('image');
+  if(typeof createImageBitmap!=='function')throw new Error('image');
+  const bitmap=await createImageBitmap(file);
+  if(!carrierDimensionsMatch(format,width,height,bitmap.width,bitmap.height)||
+      bitmap.width>MAX_STEGO_DIMENSION||
+      bitmap.height>MAX_STEGO_DIMENSION||bitmap.width*bitmap.height>MAX_STEGO_PIXELS){
+    bitmap.close();
+    throw new Error('image');
+  }
+  return {bitmap,format};
+}
+function getStegoCarrierKind(carrier){
+  if(carrier.type.startsWith('video/'))return 'VIDEO';
+  if(carrier.type.startsWith('audio/'))return 'AUDIO';
+  const extension=carrier.name.split('.').pop();
+  return extension&&extension!==carrier.name?extension.toUpperCase():'FILE';
+}
+function getStegoCarrierOutputName(name){
+  const safe=safeStegoFilename(name);
+  const extensionIndex=safe.lastIndexOf('.');
+  if(extensionIndex<=0)return `${safe}.hidden`;
+  return `${safe.slice(0,extensionIndex)}.hidden${safe.slice(extensionIndex)}`;
+}
+function updateStegoExtractHint(format){
+  $('stegoExtractHint').textContent=format==='file'
+    ?'Select the unchanged carrier output created by this tool. Its encrypted payload is appended to the original file. Enter the same access key used to embed it.'
+    :'Select the unchanged PNG output created by this tool. Enter the same access key used to embed the payload.';
+}
+async function updateStegoCapacity(){
+  const generation=++stegoSelectionGeneration;
+  const carrier=stegoCarrier.files[0];
+  if(!carrier){
+    stegoCarrierCapacity=null;
+    stegoCarrierFormat=null;
+    $('stegoPickerName').textContent='Choose an image, video, recording, or file';
+    $('stegoCarrierStatus').textContent='No carrier selected. Capacity is calculated after you choose a file.';
+    $('stegoCapacityValue').textContent='—';
+    $('stegoCapacityBar').value=0;
+    stegoHideB.textContent='Encrypt and embed payload';
+    audio.announceStegoStatus('carrierRemoved');
+    updateStegoPayloadSummary();
+    return;
+  }
+  stegoCarrierCapacity=null;
+  stegoCarrierFormat=null;
+  $('stegoCapacityValue').textContent='Checking…';
+  $('stegoCapacityBar').value=0;
+  $('stegoPickerName').textContent=carrier.name;
+  $('stegoCarrierStatus').textContent=`${carrier.name} · Checking carrier and capacity…`;
+  $('stegoCarrierStatus').classList.remove('error');
+  updateActionButtons();
+  let bitmap=null,canvas=null,format='png';
+  try{
+    ({bitmap,format}=await getStegoCarrier(carrier));
+    if(format==='file'){
+      if(generation!==stegoSelectionGeneration||locked)return;
+      stegoCarrierCapacity=MAX_STEGO_EMBEDDED_BYTES;
+      stegoCarrierFormat=format;
+      updateStegoExtractHint(format);
+      const kind=getStegoCarrierKind(carrier);
+      $('stegoCapacityValue').textContent='Up to 4 MiB';
+      $('stegoCapacityBar').value=MAX_STEGO_PAYLOAD_BYTES;
+      $('stegoCarrierStatus').textContent=
+        `${carrier.name} · ${kind} · encrypted payload will be appended, not concealed. Compatibility depends on the file format.`;
+      stegoHideB.textContent='Encrypt and append payload';
+      audio.announceStegoStatus('carrierAppendReady');
+      updateStegoPayloadSummary();
+      return;
+    }
+    canvas=document.createElement('canvas');
+    canvas.width=bitmap.width;
+    canvas.height=bitmap.height;
+    const context=canvas.getContext('2d',{willReadFrequently:true});
+    if(!context)throw new Error('image');
+    context.drawImage(bitmap,0,0);
+    const capacity=getStegoCapacity(context.getImageData(0,0,bitmap.width,bitmap.height).data);
+    if(generation!==stegoSelectionGeneration||locked)return;
+    stegoCarrierCapacity=capacity;
+    stegoCarrierFormat=format;
+    updateStegoExtractHint(format);
+    $('stegoPickerName').textContent=carrier.name;
+    $('stegoCapacityValue').textContent=formatHashFileSize(capacity);
+    $('stegoCapacityBar').value=Math.min(MAX_STEGO_PAYLOAD_BYTES,capacity);
+    $('stegoCarrierStatus').textContent=`${carrier.name} · ${bitmap.width} × ${bitmap.height} · ${format.toUpperCase()}${format==='jpeg'?' source (converted to PNG on output)':''}`;
+    stegoHideB.textContent='Encrypt and hide payload';
+  }catch(error){
+    if(generation!==stegoSelectionGeneration||locked)return;
+    stegoCarrierCapacity=null;
+    stegoCarrierFormat=null;
+    $('stegoPickerName').textContent=carrier.name;
+    $('stegoCapacityValue').textContent='Unavailable';
+    $('stegoCapacityBar').value=0;
+    $('stegoCarrierStatus').textContent=error.message==='image'
+      ?MSG.stegoimage
+      :error.message==='carrierlimit'
+        ?'Carrier files must be 1 GiB or smaller.'
+      :'Could not inspect this carrier file. Choose another file and try again.';
+    stegoHideB.textContent='Encrypt and embed payload';
+    $('stegoCarrierStatus').classList.add('error');
+    audio.announceStegoStatus('carrierInvalid');
+  }finally{
+    if(bitmap)bitmap.close();
+    if(canvas){canvas.width=0;canvas.height=0}
+  }
+  if(stegoCarrierCapacity!==null){
+    $('stegoCarrierStatus').classList.remove('error');
+    if(stegoMode==='extract'&&stegoCarrierFormat==='jpeg'){
+      setStegoStatus('JPEG is accepted as a source image for hiding. To extract, select the PNG output created by this tool.');
+      audio.announceStegoStatus('jpegExtractUnavailable');
+    }else{
+      audio.announceStegoStatus(
+        'imageCarrierReady',
+        `${stegoCarrierFormat.toUpperCase()} image selected. Estimated pixel payload capacity: ${formatHashFileSize(stegoCarrierCapacity)}.`
+      );
+    }
+  }
+  updateStegoPayloadSummary();
+}
+function setStegoMode(nextMode,announce=false){
+  stegoMode=nextMode;
+  const hiding=nextMode==='hide';
+  $('stegoModeHide').setAttribute('aria-pressed',String(hiding));
+  $('stegoModeExtract').setAttribute('aria-pressed',String(!hiding));
+  $('stegoPayloadSection').hidden=!hiding;
+  $('stegoExtractHint').hidden=hiding;
+  stegoHideB.hidden=!hiding;
+  stegoExtractB.hidden=hiding;
+  updateStegoExtractHint(stegoCarrierFormat);
+  if(!hiding&&stegoCarrierFormat==='jpeg'){
+    setStegoStatus('JPEG is accepted as a source image for hiding. To extract, select the PNG output created by this tool.');
+  }else setStegoStatus('');
+  updateActionButtons();
+  if(announce)audio.announceStegoStatus(hiding?'embedMode':'extractMode');
+}
+function estimateStegoPayload(){
+  const fileSelection=[...stegoFiles.files],folderSelection=[...stegoFolder.files];
+  const files=[...fileSelection,...folderSelection];
+  const hasText=Boolean(stegoText.value);
+  const sourceCount=Number(hasText)+Number(files.length>0);
+  if(sourceCount===0)return {valid:false,reason:'Choose a payload source.',estimate:null};
+  if(sourceCount!==1)return {valid:false,reason:'Choose exactly one payload source.',estimate:null};
+
+  let payloadBytes=new TextEncoder().encode(stegoText.value).length;
+  let metadataBytes=new TextEncoder().encode('hidden-message.txt').length;
+  const isArchive=folderSelection.length>0||files.length>1;
+  if(files.length){
+    payloadBytes=files.reduce((total,file)=>total+file.size,0);
+    metadataBytes=new TextEncoder().encode(isArchive?'hidden-files.zip':safeStegoFilename(files[0].name)).length;
+    if(isArchive){
+      payloadBytes+=22;
+      for(const file of files){
+        const path=file.webkitRelativePath||file.name;
+        payloadBytes+=76+2*new TextEncoder().encode(path).length;
+      }
+    }
+  }
+  if(payloadBytes>MAX_STEGO_PAYLOAD_BYTES)return {valid:false,reason:'Payload exceeds the 4 MiB maximum.',estimate:null};
+  const wrappedBytes=6+metadataBytes+payloadBytes;
+  const encryptedBytes=FILE_HEADER_BYTES+wrappedBytes+
+    Math.max(1,Math.ceil(wrappedBytes/FILE_CHUNK_BYTES))*FILE_TAG_BYTES;
+  if(files.length>1000)return {valid:false,reason:'Choose no more than 1,000 files.',estimate:encryptedBytes};
+  if(stegoCarrierCapacity!==null&&encryptedBytes>stegoCarrierCapacity){
+    return {valid:false,reason:'This payload is too large for the selected image. Choose a larger carrier or a smaller payload.',estimate:encryptedBytes};
+  }
+  return {valid:true,reason:'',estimate:encryptedBytes};
+}
+function updateStegoPayloadSummary(){
+  const fileSelection=[...stegoFiles.files],folderSelection=[...stegoFolder.files];
+  const files=[...fileSelection,...folderSelection];
+  const textBytes=new TextEncoder().encode(stegoText.value).length;
+  const estimate=estimateStegoPayload();
+  const payload=$('stegoPayloadStatus');
+  $('stegoClearFiles').hidden=files.length===0;
+  if(!files.length){
+    $('stegoFileSelectionSummary').textContent='No files or folder added';
+  }else{
+    const fileBytes=files.reduce((total,file)=>total+file.size,0);
+    const selectionKind=folderSelection.length&&fileSelection.length
+      ?'mixed collection'
+      :folderSelection.length?'folder'
+      :fileSelection.length>1?'collection'
+      :safeStegoFilename(files[0].name);
+    $('stegoFileSelectionSummary').textContent=
+      `${files.length} ${files.length===1?'file':'files'} · ${formatHashFileSize(fileBytes)} · ${selectionKind}`;
+  }
+  if(!stegoText.value&&!files.length){
+    payload.textContent='Add a text message or a file collection. Maximum payload size is 4 MiB.';
+    payload.classList.remove('error');
+  }else if(!estimate.valid){
+    payload.textContent=estimate.reason;
+    payload.classList.add('error');
+  }else if(stegoText.value){
+    payload.textContent=`Text · ${formatHashFileSize(textBytes)} · about ${formatHashFileSize(estimate.estimate)} carrier space needed`;
+    payload.classList.remove('error');
+  }else if(files.length){
+    const size=files.reduce((total,file)=>total+file.size,0);
+    const isArchive=folderSelection.length>0||files.length>1;
+    payload.textContent=isArchive
+      ?`Collection · ${formatHashFileSize(size)} source files · bundled as hidden-files.zip · about ${formatHashFileSize(estimate.estimate)} carrier space needed`
+      :`Single file · kept in its original format · recovered as ${safeStegoFilename(files[0].name)} · about ${formatHashFileSize(estimate.estimate)} carrier space needed`;
+    payload.classList.remove('error');
+  }else{
+    payload.textContent='Add a text message or a file collection. Maximum payload size is 4 MiB.';
+    payload.classList.remove('error');
+  }
+  updateActionButtons();
+}
+function safeStegoFilename(value){
+  const basename=String(value||'').replace(/\\/g,'/').split('/').pop()||'hidden-file.bin';
+  const safe=basename.replace(/[<>:"|?*\u0000-\u001f]/g,'_').replace(/[. ]+$/g,'').slice(0,150);
+  return safe||'hidden-file.bin';
+}
+async function getStegoPayload(){
+  const text=stegoText.value;
+  const files=[...stegoFiles.files];
+  const folderFiles=[...stegoFolder.files];
+  const selected=[...files,...folderFiles];
+  const sourceCount=Number(Boolean(text))+Number(selected.length>0);
+  if(sourceCount!==1)throw new Error('stegopayload');
+  if(text){
+    const bytes=new TextEncoder().encode(text);
+    return {bytes,name:'hidden-message.txt'};
+  }
+  if(selected.length>1000||selected.reduce((total,file)=>total+file.size,0)>MAX_STEGO_PAYLOAD_BYTES){
+    throw new Error('stegopayload');
+  }
+  let payload,name;
+  if(folderFiles.length||files.length>1){
+    payload=await buildZipArchive(selected);
+    name='hidden-files.zip';
+  }else{
+    payload=selected[0];
+    name=safeStegoFilename(payload.name);
+  }
+  if(payload.size>MAX_STEGO_PAYLOAD_BYTES)throw new Error('stegopayload');
+  return {bytes:new Uint8Array(await payload.arrayBuffer()),name};
+}
+function wrapStegoPayload(bytes,name){
+  const nameBytes=new TextEncoder().encode(safeStegoFilename(name));
+  if(nameBytes.length>1024||bytes.length>MAX_STEGO_PAYLOAD_BYTES)throw new Error('stegopayload');
+  const wrapped=new Uint8Array(6+nameBytes.length+bytes.length);
+  wrapped.set([0x48,0x57,0x50,0x31]);
+  new DataView(wrapped.buffer).setUint16(4,nameBytes.length,false);
+  wrapped.set(nameBytes,6);
+  wrapped.set(bytes,6+nameBytes.length);
+  return wrapped;
+}
+function unwrapStegoPayload(bytes){
+  const magic=[0x48,0x57,0x50,0x31];
+  if(bytes.length<6||!magic.every((byte,index)=>bytes[index]===byte))throw new Error('stegoformat');
+  const nameLength=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength).getUint16(4,false);
+  if(!nameLength||nameLength>1024||6+nameLength>bytes.length)throw new Error('stegoformat');
+  let name;
+  try{name=new TextDecoder('utf-8',{fatal:true}).decode(bytes.subarray(6,6+nameLength))}
+  catch{throw new Error('stegoformat')}
+  return {name:safeStegoFilename(name),bytes:bytes.subarray(6+nameLength)};
+}
+function combineStegoChunks(chunks,total,maxBytes){
+  if(total>maxBytes)throw new Error('filetoolarge');
+  const result=new Uint8Array(total);
+  let offset=0;
+  for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length}
+  return result;
+}
+async function runStego(extracting){
+  if(locked||operationBusy)return;
+  const carrier=stegoCarrier.files[0],password=key.value;
+  if(!carrier){setStegoStatus('Choose a carrier file to continue.',true,'carrierRequired');return}
+  const {value:stegoPassword,input:stegoPasswordInput,requiredLength}=getStegoKeySettings();
+  if(!stegoPassword){
+    setStegoStatus('Enter your access key to continue.',true,'keyRequired');
+    stegoPasswordInput.focus();
+    return;
+  }
+  if(extracting&&countPassphraseCharacters(stegoPassword)<10){
+    setStegoStatus(MSG.short,true,'keyTooShort');
+    stegoPasswordInput.focus();
+    return;
+  }
+  if(!extracting&&countPassphraseCharacters(stegoPassword)!==requiredLength){
+    setStegoStatus(`New payload encryption requires exactly ${requiredLength} characters. Your access key has ${countPassphraseCharacters(stegoPassword)}.`,true,'keyLength');
+    stegoPasswordInput.focus();
+    return;
+  }
+  busy(true,extracting?'Extracting hidden payload':'Encrypting payload and embedding it in the carrier');
+  const generation=operationGeneration;
+  let bitmap=null,canvas=null,chunks=[],carrierFormat='png';
+  try{
+    if(!subtle)throw new Error('nocrypto');
+    ({bitmap,format:carrierFormat}=await getStegoCarrier(carrier));
+    if(extracting&&carrierFormat!=='png'&&carrierFormat!=='file')throw new Error('stegoformat');
+    if(locked||generation!==operationGeneration)throw new Error('cancelled');
+    let context=null,imageData=null;
+    if(carrierFormat!=='file'){
+      canvas=document.createElement('canvas');
+      canvas.width=bitmap.width;
+      canvas.height=bitmap.height;
+      context=canvas.getContext('2d',{willReadFrequently:true});
+      if(!context)throw new Error('image');
+      context.drawImage(bitmap,0,0);
+      imageData=context.getImageData(0,0,bitmap.width,bitmap.height);
+    }
+    let total=0;
+    const collect=async chunk=>{
+      if(locked||generation!==operationGeneration)throw new Error('cancelled');
+      total+=chunk.length;
+      if(total>MAX_STEGO_EMBEDDED_BYTES)throw new Error('filetoolarge');
+      chunks.push(chunk.slice());
+    };
+    let lastProgress=-1;
+    const reportProgress=(complete,amount)=>{
+      if(locked||generation!==operationGeneration)throw new Error('cancelled');
+      const percent=amount?Math.floor(complete*100/amount):100;
+      if(Math.floor(percent/10)!==lastProgress){
+        lastProgress=Math.floor(percent/10);
+        setStegoStatus(`${extracting?'Decrypting':'Encrypting'} hidden payload: ${percent}%`);
+      }
+    };
+    if(extracting){
+      const encrypted=carrierFormat==='file'
+        ?await extractAppendedPayload(carrier)
+        :extractPayload(imageData.data);
+      if(encrypted.length>MAX_STEGO_EMBEDDED_BYTES)throw new Error('stegoformat');
+      await decryptFileStream(new Blob([encrypted]),stegoPassword,collect,reportProgress);
+      const recovered=unwrapStegoPayload(combineStegoChunks(chunks,total,MAX_STEGO_PAYLOAD_BYTES+1026));
+      if(recovered.bytes.length>MAX_STEGO_PAYLOAD_BYTES)throw new Error('stegoformat');
+      if(locked||generation!==operationGeneration)return;
+      triggerDownload(new Blob([recovered.bytes],{type:'application/octet-stream'}),recovered.name);
+      setStegoStatus(recovered.name.toLowerCase().endsWith('.zip')
+        ?`Hidden ZIP recovered as ${recovered.name}. Open it to access its contents.`
+        :`Hidden payload extracted and decrypted as ${recovered.name}.`,false,'extracted');
+    }else{
+      const source=await getStegoPayload();
+      const wrapped=wrapStegoPayload(source.bytes,source.name);
+      const chunkCount=Math.max(1,Math.ceil(wrapped.length/FILE_CHUNK_BYTES));
+      const encryptedLength=FILE_HEADER_BYTES+wrapped.length+chunkCount*FILE_TAG_BYTES;
+      if(carrierFormat!=='file'&&encryptedLength>getStegoCapacity(imageData.data))throw new Error('capacity');
+      await encryptFileStream(new Blob([wrapped]),stegoPassword,collect,reportProgress);
+      const encrypted=combineStegoChunks(chunks,total,MAX_STEGO_EMBEDDED_BYTES);
+      if(carrierFormat==='file'){
+        const footer=createAppendedPayloadFooter(encrypted.length);
+        const output=new Blob([carrier,encrypted,footer],{type:carrier.type||'application/octet-stream'});
+        if(locked||generation!==operationGeneration)return;
+        const outputName=getStegoCarrierOutputName(carrier.name);
+        triggerDownload(output,outputName);
+        setStegoStatus(`Encrypted payload appended to ${outputName}. The original ${getStegoCarrierKind(carrier)} file was not changed. Appended data is not concealed and may affect compatibility.`,false,'appended');
+      }else{
+        embedPayload(imageData.data,encrypted);
+        context.putImageData(imageData,0,0);
+        const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+        if(!png||png.size>MAX_STEGO_IMAGE_BYTES)throw new Error('image');
+        if(locked||generation!==operationGeneration)return;
+        triggerDownload(png,'hidden-payload.png');
+        setStegoStatus(`Encrypted ${source.name} hidden in hidden-payload.png.${carrierFormat==='jpeg'?' The JPEG carrier was converted to PNG.':''} The original image was not changed.`,false,'embedded');
+      }
+    }
+  }catch(error){
+    if(locked||generation!==operationGeneration)return;
+    logCryptoFailure(error,extracting);
+    const message={
+      capacity:MSG.stegocapacity,
+      image:MSG.stegoimage,
+      carrierlimit:'Carrier files must be 1 GiB or smaller.',
+      stegoformat:extracting&&carrierFormat==='jpeg'
+        ?'Extraction requires the PNG output created when the payload was hidden. JPEG is accepted only as a source image.'
+        :MSG.stegoformat,
+      stegopayload:MSG.stegofile,
+      archivefiles:'Choose between 1 and 1,000 files to archive.',
+      archivepath:'The folder contains a duplicate or unsafe file path and cannot be packaged.',
+      cancelled:'The operation was cancelled.'
+    }[error.message]||getUserErrorMessage(error,extracting,MSG,'file');
+    setStegoStatus(message,true,'operationFailed');
+  }finally{
+    if(bitmap)bitmap.close();
+    if(canvas){canvas.width=0;canvas.height=0}
+    chunks=[];
+    busy(false);
+  }
+}
+function clearStegoWorkspace(){
+  stegoSelectionGeneration++;
+  stegoCarrier.value='';
+  stegoSeparateKey.checked=false;
+  $('stegoKeySetup').hidden=true;
+  stegoAccessKey.value='';
+  stegoAccessKey.type='password';
+  $('stegoAccessKeyEye').textContent='Show';
+  $('stegoAccessKeyEye').title='Show media access key';
+  $('stegoAccessKeyEye').setAttribute('aria-label','Show media access key');
+  $('stegoAccessKeyEye').setAttribute('aria-pressed','false');
+  updateStegoPassphraseStrength();
+  stegoText.value='';
+  stegoFiles.value='';
+  stegoFolder.value='';
+  stegoCarrierCapacity=null;
+  $('stegoPickerName').textContent='Choose an image, video, recording, or file';
+  $('stegoCarrierStatus').textContent='No carrier selected. Capacity is calculated after you choose a file.';
+  $('stegoCarrierStatus').classList.remove('error');
+  $('stegoCapacityValue').textContent='—';
+  $('stegoCapacityBar').value=0;
+  stegoCarrierFormat=null;
+  stegoHideB.textContent='Encrypt and embed payload';
+  $('stegoFileSelectionSummary').textContent='No files or folder added';
+  $('stegoClearFiles').hidden=true;
+  $('stegoPayloadStatus').textContent='Add a text message or a file collection. Maximum payload size is 4 MiB.';
+  $('stegoPayloadStatus').classList.remove('error');
+  setStegoMode('hide');
+  setStegoStatus('');
+  updateActionButtons();
 }
 function downloadMessageToken(){
   if(!lastEncryptedToken)return;
@@ -1012,6 +1517,7 @@ function clearSensitiveWorkspace(){
   fileInput.value='';
   $('fileStatus').textContent='';
   $('fileStatus').classList.remove('error');
+  clearStegoWorkspace();
   clearHashWorkspace();
   clearLegacyMigration();
   setMessageDownload(null);
@@ -1027,12 +1533,107 @@ function clearSensitiveWorkspace(){
 /* ================= Wiring ================= */
 encB.addEventListener('click',()=>run(false));
 decB.addEventListener('click',()=>run(true));
-clrB.addEventListener('click',()=>{inp.value='';fileInput.value='';$('fileStatus').textContent='';$('fileStatus').classList.remove('error');clearHashWorkspace();clearLegacyMigration();setMessageDownload(null);$('signatureStatus').textContent='';show(EMPTY);inp.focus();setTimeout(()=>audio.announceStatus('workspaceCleared'),0)});
+clrB.addEventListener('click',()=>{inp.value='';fileInput.value='';$('fileStatus').textContent='';$('fileStatus').classList.remove('error');clearStegoWorkspace();clearHashWorkspace();clearLegacyMigration();setMessageDownload(null);$('signatureStatus').textContent='';show(EMPTY);inp.focus();setTimeout(()=>audio.announceStatus('workspaceCleared'),0)});
 copyB.addEventListener('click',copy);
 downloadTokenB.addEventListener('click',downloadMessageToken);
 fileEncryptB.addEventListener('click',()=>runFile(false));
 fileDecryptB.addEventListener('click',()=>runFile(true));
 fileInput.addEventListener('change',()=>{$('fileStatus').textContent='';$('fileStatus').classList.remove('error');updateActionButtons()});
+stegoHideB.addEventListener('click',()=>runStego(false));
+stegoExtractB.addEventListener('click',()=>runStego(true));
+stegoModeHideB.addEventListener('click',()=>setStegoMode('hide',true));
+stegoModeExtractB.addEventListener('click',()=>setStegoMode('extract',true));
+stegoSeparateKey.addEventListener('change',()=>{
+  $('stegoKeySetup').hidden=!stegoSeparateKey.checked;
+  if(!stegoSeparateKey.checked){
+    stegoAccessKey.value='';
+    stegoAccessKey.type='password';
+    $('stegoAccessKeyEye').textContent='Show';
+    $('stegoAccessKeyEye').title='Show media access key';
+    $('stegoAccessKeyEye').setAttribute('aria-label','Show media access key');
+    $('stegoAccessKeyEye').setAttribute('aria-pressed','false');
+  }
+  updateStegoPassphraseStrength();
+  setStegoStatus('');
+  audio.announceStegoStatus(stegoSeparateKey.checked?'separateKeyEnabled':'sharedKeyEnabled');
+});
+stegoAccessKey.addEventListener('input',updateStegoPassphraseStrength);
+stegoPassphraseLength.addEventListener('change',updateStegoPassphraseStrength);
+stegoGeneratePassphraseB.addEventListener('click',()=>{
+  try{
+    stegoAccessKey.value=generatePassphrase(Number(stegoPassphraseLength.value));
+    updateStegoPassphraseStrength();
+    audio.announcePassphraseResult({
+      generated:true,keyId:'stegoAccessKey',lengthId:'stegoPassphraseLength'
+    });
+    stegoAccessKey.focus();
+  }catch(error){
+    stegoKeyStrengthStatus.className='key-strength-status error';
+    stegoKeyStrengthStatus.textContent=error.message==='nocrypto'
+      ?'Secure passphrase generation is unavailable. Open this page over HTTPS or localhost.'
+      :'Could not generate a secure passphrase. Try again.';
+    audio.announcePassphraseGenerationError();
+  }
+});
+$('stegoAccessKeyEye').addEventListener('click',event=>{
+  const show_=stegoAccessKey.type==='password';
+  stegoAccessKey.type=show_?'text':'password';
+  event.currentTarget.textContent=show_?'Hide':'Show';
+  event.currentTarget.title=show_?'Hide media access key':'Show media access key';
+  event.currentTarget.setAttribute('aria-pressed',String(show_));
+  event.currentTarget.setAttribute('aria-label',show_?'Hide media access key':'Show media access key');
+});
+stegoChooseFilesB.addEventListener('click',()=>stegoFiles.click());
+stegoChooseFolderB.addEventListener('click',()=>stegoFolder.click());
+stegoClearFilesB.addEventListener('click',()=>{
+  stegoFiles.value='';
+  stegoFolder.value='';
+  updateStegoPayloadSummary();
+});
+stegoFilePicker.addEventListener('dragover',event=>{
+  event.preventDefault();
+  stegoFilePicker.classList.add('dragging');
+});
+stegoFilePicker.addEventListener('dragleave',event=>{
+  if(!stegoFilePicker.contains(event.relatedTarget))stegoFilePicker.classList.remove('dragging');
+});
+stegoFilePicker.addEventListener('drop',event=>{
+  event.preventDefault();
+  stegoFilePicker.classList.remove('dragging');
+  if(locked||operationBusy)return;
+  const transfer=event.dataTransfer;
+  if(!transfer)return;
+  const includesDirectory=[...transfer.items].some(item=>{
+    const entry=typeof item.webkitGetAsEntry==='function'?item.webkitGetAsEntry():null;
+    return Boolean(entry?.isDirectory);
+  });
+  if(includesDirectory){
+    setStegoStatus('Use Choose folder to add a directory and preserve its folder structure.',true,'folderRequired');
+    return;
+  }
+  if(!transfer.files.length)return;
+  const combined=new DataTransfer();
+  for(const file of stegoFiles.files)combined.items.add(file);
+  for(const file of transfer.files)combined.items.add(file);
+  if(combined.files.length>1000){
+    setStegoStatus('A payload collection can contain no more than 1,000 files.',true,'tooManyPayloadFiles');
+    return;
+  }
+  stegoFiles.files=combined.files;
+  setStegoStatus('');
+  updateStegoPayloadSummary();
+});
+stegoCarrier.addEventListener('change',()=>{
+  setStegoStatus('');
+  $('stegoCarrierStatus').classList.remove('error');
+  void updateStegoCapacity();
+});
+for(const input of [stegoText,stegoFiles,stegoFolder]){
+  input.addEventListener(input===stegoText?'input':'change',()=>{
+    setStegoStatus('');
+    updateStegoPayloadSummary();
+  });
+}
 hashInput.addEventListener('change',event=>handleHashFileSelect(event.target.files));
 expectedHash.addEventListener('change',()=>{
   if(hashInput.files && hashInput.files.length)handleHashFileSelect(hashInput.files,false);
@@ -1073,6 +1674,33 @@ hashDropzone.addEventListener('drop',event=>{
     handleHashFileSelect(hashInput.files);
   }
 });
+stegoDropzone.addEventListener('keydown',event=>{
+  if(event.key==='Enter'||event.key===' '){
+    event.preventDefault();
+    stegoCarrier.click();
+  }
+});
+stegoDropzone.addEventListener('dragover',event=>{
+  event.preventDefault();
+  stegoDropzone.classList.add('dragging');
+});
+stegoDropzone.addEventListener('dragleave',event=>{
+  if(!stegoDropzone.contains(event.relatedTarget))stegoDropzone.classList.remove('dragging');
+});
+stegoDropzone.addEventListener('drop',event=>{
+  event.preventDefault();
+  stegoDropzone.classList.remove('dragging');
+  const files=event.dataTransfer?.files;
+  if(!files?.length)return;
+  if(files.length!==1){
+    setStegoStatus('Choose one carrier image at a time.',true,'oneCarrierRequired');
+    return;
+  }
+  const transfer=new DataTransfer();
+  transfer.items.add(files[0]);
+  stegoCarrier.files=transfer.files;
+  stegoCarrier.dispatchEvent(new Event('change',{bubbles:true}));
+});
 mode.addEventListener('change',()=>{
   if(mode.value==='legacy'&&!legacyWarningAcknowledged){
     const accepted=window.confirm(
@@ -1092,9 +1720,9 @@ $('aesKeySize').addEventListener('change',()=>{invalidateMessageResult();refresh
 $('rsaKeySize').addEventListener('change',()=>{invalidateMessageResult();refresh()});
 $('generateRsa').addEventListener('click',generateRsa);
 $('rsaPublic').addEventListener('input',()=>{invalidateMessageResult();scheduleRsaFingerprint()});
-$('key').addEventListener('input',()=>{invalidateMessageResult();updatePassphraseStrength()});
+$('key').addEventListener('input',()=>{invalidateMessageResult();updatePassphraseStrength();updateActionButtons()});
 $('key').addEventListener('blur',()=>audio.announcePassphraseResult());
-$('passphraseLength').addEventListener('change',updatePassphraseStrength);
+$('passphraseLength').addEventListener('change',()=>{updatePassphraseStrength();updateActionButtons()});
 $('generatePassphrase').addEventListener('click',()=>{
   try{
     key.value=generatePassphrase(Number($('passphraseLength').value));
@@ -1187,5 +1815,7 @@ createWorkspaceLock({
   }
 });
 refresh();
+setStegoMode('hide');
+updateStegoPayloadSummary();
 void detectAes192Support();
 })();

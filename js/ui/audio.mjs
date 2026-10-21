@@ -52,6 +52,51 @@ export const NARRATION_LANGUAGES = Object.freeze({
   fr: Object.freeze({ label: 'Français', speechTag: 'fr-FR' })
 });
 
+const HASH_CONTROL_NARRATION = Object.freeze({
+  en: Object.freeze({
+    hashDropzone: 'File check area. Choose or drop files to calculate their digests on this device.',
+    hashInput: 'Choose files to check. The selected digest methods will run in your browser.',
+    hashSelected: 'Selected files ready for a local digest check.',
+    hashOutput: 'File check results. Compare the complete digest with one from a source you trust.'
+  }),
+  yo: Object.freeze({
+    hashDropzone: 'Ààyè àyẹ̀wò fáìlì. Yan fáìlì tàbí fà á síbí láti ṣe ààmì rẹ̀ lórí ẹ̀rọ yìí.',
+    hashInput: 'Yan àwọn fáìlì láti ṣàyẹ̀wò. A ó ṣe ààmì wọn lórí ẹ̀rọ aṣàwákiri rẹ.',
+    hashSelected: 'Àwọn fáìlì tí a yàn ti ṣetán fún àyẹ̀wò ààmì lórí ẹ̀rọ yìí.',
+    hashOutput: 'Àbájáde àyẹ̀wò fáìlì. Fi gbogbo ààmì wé èyí láti orísun tí o gbẹ́kẹ̀lé.'
+  }),
+  ig: Object.freeze({
+    hashDropzone: 'Ebe nyocha faịlụ. Họrọ faịlụ ma ọ bụ dọkpụrụ ya ebe a ka ị gbakọọ akara ya na ngwaọrụ a.',
+    hashInput: 'Họrọ faịlụ ị ga-enyocha. A ga-agbakọ akara ndị ahọpụtara na ihe nchọgharị gị.',
+    hashSelected: 'Faịlụ ndị ahọpụtara adịla njikere maka nyocha akara na ngwaọrụ a.',
+    hashOutput: 'Nsonaazụ nyocha faịlụ. Tụnyere akara ahụ dum na nke sitere n’ebe ị tụkwasịrị obi.'
+  }),
+  ha: Object.freeze({
+    hashDropzone: 'Wurin duba fayil. Zaɓi fayil ko ja shi nan don lissafa lambarsa a wannan na’ura.',
+    hashInput: 'Zaɓi fayilolin da za a duba. Za a lissafa lambobin da ka zaɓa a burauzarka.',
+    hashSelected: 'Fayilolin da aka zaɓa sun shirya don duba lambobinsu a wannan na’ura.',
+    hashOutput: 'Sakamakon duba fayil. Kwatanta cikakkiyar lambar da wadda ta fito daga amintaccen tushe.'
+  }),
+  pcm: Object.freeze({
+    hashDropzone: 'File check area. Choose files or drop dem here to calculate di codes for this device.',
+    hashInput: 'Choose files to check. Your browser go calculate di digest methods wey you select.',
+    hashSelected: 'Di files wey you choose don ready for local file check.',
+    hashOutput: 'File check result. Compare di full digest with one from trusted source.'
+  }),
+  es: Object.freeze({
+    hashDropzone: 'Zona de comprobación. Selecciona archivos o arrástralos aquí para calcular sus resúmenes en este dispositivo.',
+    hashInput: 'Selecciona los archivos que quieres comprobar. El navegador calculará los resúmenes elegidos.',
+    hashSelected: 'Los archivos seleccionados están listos para una comprobación local.',
+    hashOutput: 'Resultados de la comprobación. Compara el resumen completo con uno de una fuente de confianza.'
+  }),
+  fr: Object.freeze({
+    hashDropzone: 'Zone de vérification. Choisissez des fichiers ou déposez-les ici pour calculer leurs empreintes sur cet appareil.',
+    hashInput: 'Choisissez les fichiers à vérifier. Le navigateur calculera les empreintes sélectionnées.',
+    hashSelected: 'Les fichiers sélectionnés sont prêts pour une vérification locale.',
+    hashOutput: 'Résultats de la vérification. Comparez l’empreinte complète à celle d’une source fiable.'
+  })
+});
+
 const PASSPHRASE_STRENGTH_NARRATION = Object.freeze({
   en: {
     generated: 'Secure passphrase generated.',
@@ -363,9 +408,6 @@ const STATUS_NARRATION = Object.freeze({
     messageDecrypted: 'A ti tú ìfìpamọ́ ìfiránṣẹ́. Ọ̀rọ̀ tó hàn jẹ́ àṣírí; pa á mọ́.',
     legacyMigrationPrepared: 'Ọ̀rọ̀ ìtàn àtijọ́ ti ṣetán nínú ààyè ìfiránṣẹ́. Tẹ kọ́kọ́rọ́ ààbò tuntun tó lágbára, kí o sì fi AES-256-GCM pamọ́.',
     operationFailed: 'Iṣẹ́ náà kò ṣàṣeyọrí. Ṣàyẹ̀wò ọ̀nà, kọ́kọ́rọ́ àti ohun tí o tẹ̀ sí, kí o sì tún gbìyànjú.',
-    hashSelected: 'A ti yan awọn faili fun iṣiro hash. A yoo ṣe iṣiro wọn pẹlu awọn algoridimu ti o yan.',
-    hashCalculated: 'Iṣiro hash faili ti pari. Awọn iye ti o yan wa ni agbegbe abajade.',
-    hashFailed: 'Iṣiro hash kuna. Ṣayẹwo faili ati algoridimu, ki o tun gbiyanju.',
     hashCalculated: 'A ti ṣe ìṣírò hash fáìlì. Àwọn ọ̀rọ̀ hash ti a yàn wà nínú ibi àbájáde.',
     hashFailed: 'Ìṣírò hash kò ṣàṣeyọrí. Ṣàyẹ̀wò fáìlì àti algoríìtmù, kí o sì tún gbìyànjú.',
     fileEncrypted: 'A ti fi fáìlì pamọ́, a sì ti fi fáìlì ìpamọ́ náà pamọ́ sí ibi tí o yàn.',
@@ -815,11 +857,81 @@ function getRsaGeneratedNarration(language, keyBits, mode) {
 }
 
 const HASH_ALGORITHM_GUIDES = Object.freeze({
-  md5: 'MD5 is checked. It creates a short code from a file. The same file makes the same code, so MD5 can help spot duplicates or work with older systems. But MD5 is not safe for security: someone can make a changed file with the same code. Do not use MD5 to prove a file is genuine or unchanged. To use it here, leave MD5 checked, choose or drop your file, then compare the code shown here with one from a source you trust. For a safer check, use SHA-256.',
-  sha1: 'SHA one is checked. It creates a code from a file and may be needed by older systems. But SHA one is no longer safe for important security checks: different files can be made to have the same code. To use it here, leave SHA one checked, choose or drop your file, then compare the code shown here with one from a source you trust. For a new check, use SHA-256 unless a trusted system asks for SHA one.',
-  sha256: 'SHA two fifty-six is checked. It creates a code you can use to check that a download matches the file its maker provided. It does not hide the file or prove who made it. If someone can change both the file and the code you check against, this check cannot protect you. To use it here, leave SHA two fifty-six checked, choose or drop your file, then compare the full code shown here with a code from a source you trust, such as the maker’s official website.',
-  sha512: 'SHA five twelve is checked. It creates a longer code that you can use to check a file. Choose it when the maker or system asks for SHA five twelve. It does not hide the file or prove who made it. The longer code can also be harder to compare, and it is not always the right choice instead of SHA two fifty-six. To use it here, leave SHA five twelve checked, choose or drop your file, then compare the full code shown here with a code from a source you trust.'
+  en: Object.freeze({
+    md5: 'MD5 creates a short file digest for compatibility with older systems. It is not safe for security checks. Choose a file to calculate it; for a safer check, use SHA-256.',
+    sha1: 'SHA one is kept for compatibility with older systems, but it is not safe for important security checks. Choose a file to calculate it; use SHA-256 for a new check unless a trusted system requires SHA one.',
+    sha256: 'SHA two fifty-six creates a digest for checking a file. Choose a file, then compare the complete digest with one from a source you trust. A match does not prove who created the file.',
+    sha512: 'SHA five twelve creates a longer file digest. Choose a file, then compare the complete digest with one from a source you trust. Use it when the publisher or system requests it.'
+  }),
+  yo: Object.freeze({
+    md5: 'MD5 ń ṣe ààmì fáìlì kúkúrú fún ìbáramu pẹ̀lú àwọn ètò àtijọ́. Kò ní ààbò fún àyẹ̀wò pàtàkì. Yan fáìlì láti ṣe ààmì rẹ̀; lo SHA-256 fún àyẹ̀wò tó ní ààbò jù.',
+    sha1: 'A pa SHA one mọ́ fún ìbáramu pẹ̀lú àwọn ètò àtijọ́, ṣùgbọ́n kò ní ààbò fún àyẹ̀wò pàtàkì. Yan fáìlì láti ṣe ààmì rẹ̀; lo SHA-256 àyàfi tí ètò tí o gbẹ́kẹ̀lé bá béèrè fún SHA one.',
+    sha256: 'SHA two fifty-six ń ṣe ààmì láti ṣàyẹ̀wò fáìlì. Yan fáìlì, kí o sì fi gbogbo ààmì náà wé èyí láti orísun tí o gbẹ́kẹ̀lé. Ìbámu kò jẹ́rìí ẹni tó dá fáìlì náà.',
+    sha512: 'SHA five twelve ń ṣe ààmì fáìlì tó gùn sí i. Yan fáìlì, kí o sì fi gbogbo ààmì náà wé èyí láti orísun tí o gbẹ́kẹ̀lé. Lo ó tí olùtẹ̀jáde tàbí ètò bá béèrè fún un.'
+  }),
+  ig: Object.freeze({
+    md5: 'MD5 na-emepụta akara faịlụ dị mkpụmkpụ maka sistemụ ochie. Ọ nweghị nchekwa maka nyocha nchekwa dị mkpa. Họrọ faịlụ iji gbakọọ akara ya; jiri SHA-256 maka nyocha dị nchebe karịa.',
+    sha1: 'A na-edobe SHA one maka sistemụ ochie, mana ọ nweghị nchekwa maka nyocha nchekwa dị mkpa. Họrọ faịlụ iji gbakọọ akara ya; jiri SHA-256 ma ọ bụrụ na sistemụ ntụkwasịrị obi achọghị SHA one.',
+    sha256: 'SHA two fifty-six na-emepụta akara iji tụnyere faịlụ. Họrọ faịlụ, tụzie akara ahụ dum na nke sitere n’ebe ị tụkwasịrị obi. Nsonaazụ dakọtara anaghị egosi onye mepụtara faịlụ ahụ.',
+    sha512: 'SHA five twelve na-emepụta akara faịlụ toro ogologo. Họrọ faịlụ, tụzie akara ahụ dum na nke sitere n’ebe ị tụkwasịrị obi. Jiri ya mgbe onye bipụtara faịlụ ma ọ bụ sistemụ rịọrọ ya.'
+  }),
+  ha: Object.freeze({
+    md5: 'MD5 yana ƙirƙirar gajeren lambar fayil don tsofaffin tsare-tsare. Ba shi da aminci ga muhimman binciken tsaro. Zaɓi fayil don lissafa lambarsa; yi amfani da SHA-256 don bincike mafi aminci.',
+    sha1: 'An ajiye SHA one don tsofaffin tsare-tsare, amma ba shi da aminci ga muhimman binciken tsaro. Zaɓi fayil don lissafa lambarsa; yi amfani da SHA-256 sai dai idan tsarin da ka amince da shi ya buƙaci SHA one.',
+    sha256: 'SHA two fifty-six yana ƙirƙirar lambar duba fayil. Zaɓi fayil, sannan ka kwatanta cikakkiyar lambar da wadda ta fito daga amintaccen tushe. Daidaito ba ya tabbatar da wanda ya ƙirƙiri fayil ɗin.',
+    sha512: 'SHA five twelve yana ƙirƙirar lambar fayil mafi tsawo. Zaɓi fayil, sannan ka kwatanta cikakkiyar lambar da wadda ta fito daga amintaccen tushe. Yi amfani da shi idan mai wallafa ko tsarin ya nema.'
+  }),
+  pcm: Object.freeze({
+    md5: 'MD5 dey make short file code for old systems. E no safe for serious security check. Choose file to calculate di code; use SHA-256 for safer check.',
+    sha1: 'We keep SHA one for old systems, but e no safe for serious security check. Choose file to calculate di code; use SHA-256 unless trusted system ask for SHA one.',
+    sha256: 'SHA two fifty-six dey make code to check file. Choose di file, then compare di full code with one from trusted source. Match no prove who make di file.',
+    sha512: 'SHA five twelve dey make longer file code. Choose di file, then compare di full code with one from trusted source. Use am when di publisher or system ask for am.'
+  }),
+  es: Object.freeze({
+    md5: 'MD5 crea un resumen corto del archivo para sistemas antiguos. No es seguro para comprobaciones importantes. Selecciona un archivo para calcularlo; usa SHA-256 para una comprobación más segura.',
+    sha1: 'SHA uno se conserva para sistemas antiguos, pero no es seguro para comprobaciones importantes. Selecciona un archivo para calcularlo; usa SHA-256 salvo que un sistema de confianza requiera SHA uno.',
+    sha256: 'SHA dos cincuenta y seis crea un resumen para comprobar un archivo. Selecciónalo y compara el resumen completo con uno de una fuente de confianza. Una coincidencia no demuestra quién creó el archivo.',
+    sha512: 'SHA cinco doce crea un resumen de archivo más largo. Selecciónalo y compara el resumen completo con uno de una fuente de confianza. Úsalo cuando lo solicite el editor o el sistema.'
+  }),
+  fr: Object.freeze({
+    md5: 'MD5 crée une courte empreinte de fichier pour les anciens systèmes. Cette méthode n’est pas sûre pour les vérifications importantes. Choisissez un fichier pour la calculer ; préférez SHA-256 pour une vérification plus sûre.',
+    sha1: 'SHA one est conservé pour les anciens systèmes, mais n’est pas sûr pour les vérifications importantes. Choisissez un fichier pour le calculer ; préférez SHA-256, sauf si un système de confiance exige SHA one.',
+    sha256: 'SHA two fifty-six crée une empreinte pour vérifier un fichier. Choisissez-le, puis comparez l’empreinte complète à celle d’une source fiable. Une correspondance ne prouve pas qui a créé le fichier.',
+    sha512: 'SHA five twelve crée une empreinte de fichier plus longue. Choisissez-le, puis comparez l’empreinte complète à celle d’une source fiable. Utilisez-le si l’éditeur ou le système le demande.'
+  })
 });
+
+const HASH_UNCHECKED_NARRATION = Object.freeze({
+  en: name => `${name} is unchecked and will not be included in the file check.`,
+  yo: name => `A kò yan ${name}; a kò ní lò ó láti ṣàyẹ̀wò fáìlì.`,
+  ig: name => `Ahọpụtaghị ${name}; a gaghị etinye ya na nyocha faịlụ.`,
+  ha: name => `Ba a zaɓi ${name} ba; ba za a yi amfani da shi wajen duba fayil ba.`,
+  pcm: name => `You no select ${name}, so dem no go include am for di file check.`,
+  es: name => `${name} no está seleccionado y no se incluirá en la comprobación.`,
+  fr: name => `${name} n’est pas sélectionné et ne sera pas utilisé pour vérifier le fichier.`
+});
+
+export function selectNarrationVoice(voices, language = 'en') {
+  const speechTag = NARRATION_LANGUAGES[language]?.speechTag || NARRATION_LANGUAGES.en.speechTag;
+  const normalizedTag = speechTag.toLowerCase().replaceAll('_', '-');
+  const languagePrefix = normalizedTag.slice(0, 2);
+  const candidates = (Array.isArray(voices) ? voices : []).map(voice => ({
+    voice,
+    lang: String(voice.lang || '').toLowerCase().replaceAll('_', '-')
+  })).filter(candidate => candidate.lang);
+  const exact = candidates.filter(candidate => candidate.lang === normalizedTag);
+  const regional = candidates.filter(candidate =>
+    candidate.lang.startsWith(`${languagePrefix}-`) && candidate.lang !== normalizedTag
+  );
+  const base = candidates.filter(candidate => candidate.lang === languagePrefix);
+  const englishFallback = language === 'pcm'
+    ? candidates.filter(candidate => candidate.lang.startsWith('en-') || candidate.lang === 'en')
+    : [];
+  const selected = exact.length ? exact : regional.length ? regional : base.length ? base : englishFallback;
+  return selected.find(candidate => candidate.voice.localService === true)?.voice
+    || selected[0]?.voice
+    || null;
+}
 
 const HASH_ALGORITHM_NAMES = Object.freeze({
   md5: 'MD5',
@@ -931,23 +1043,7 @@ export function createAudioController({ isLocked }) {
 
   function pickVoice(language) {
     const voices = window.speechSynthesis.getVoices();
-    if (!voices.length) return null;
-    const speechTag = NARRATION_LANGUAGES[language].speechTag;
-    const languagePrefix = speechTag.slice(0, 2);
-    if (language !== 'en') {
-      const matchingVoice = voices.find(item => item.lang.toLowerCase() === speechTag.toLowerCase()) ||
-        voices.find(item => {
-          const voiceLanguage = item.lang.toLowerCase();
-          return voiceLanguage === languagePrefix ||
-            voiceLanguage.startsWith(`${languagePrefix}-`) ||
-            voiceLanguage.startsWith(`${languagePrefix}_`);
-        });
-      if (matchingVoice || language !== 'pcm') return matchingVoice || null;
-    }
-    return voices.find(item => /daniel|uk english male|george|ryan|arthur|oliver/i.test(item.name)) ||
-      voices.find(item => /^en[-_]gb/i.test(item.lang)) ||
-      voices.find(item => /^en/i.test(item.lang)) ||
-      voices[0];
+    return selectNarrationVoice(voices, language);
   }
 
   function stopNarration() {
@@ -1014,9 +1110,11 @@ export function createAudioController({ isLocked }) {
     }
   }
 
-  function getPassphraseStrengthResult({ generated = false, includeLength = true } = {}) {
-    const value = $('key').value;
-    const target = Number($('passphraseLength').value);
+  function getPassphraseStrengthResult({
+    generated = false, includeLength = true, keyId = 'key', lengthId = 'passphraseLength'
+  } = {}) {
+    const value = $(keyId).value.trim();
+    const target = Number($(lengthId).value);
     const strings = PASSPHRASE_STRENGTH_NARRATION[narrationLanguage]
       || PASSPHRASE_STRENGTH_NARRATION.en;
     const estimate = estimatePassphraseStrength(value, target);
@@ -1048,16 +1146,65 @@ export function createAudioController({ isLocked }) {
   function getContextualGuide(target) {
     if (!target || typeof target.closest !== 'function') return null;
     const element = target.closest(
-      'input,textarea,select,button,label,summary,.field-hint,.key-strength-status,.key-strength-guidance,[role="progressbar"],.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
+      'input,textarea,select,button,label,summary,#stegoStatus,#stegoCarrierStatus,#stegoPayloadStatus,#stegoExtractHint,#stegoFileSelectionSummary,.field-hint,.key-strength-status,.key-strength-guidance,.stego-detail,.stego-extract-hint,.stego-warning,.stego-security-card,.stego-capacity-card,.stego-format-card,.stego-picker-copy,.stego-drop-hint,.stego-section-label,[role="progressbar"],progress,.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
     );
     if (!element) return null;
     const hashAlgorithmInput = element.name === 'hashAlgorithm' ? element : element.querySelector?.('input[name="hashAlgorithm"]');
     if (hashAlgorithmInput && hashAlgorithmInput.name === 'hashAlgorithm') {
       const algorithm = hashAlgorithmInput.value;
-      return HASH_ALGORITHM_GUIDES[algorithm] ||
+      return HASH_ALGORITHM_GUIDES[narrationLanguage]?.[algorithm] ||
+        HASH_ALGORITHM_GUIDES.en[algorithm] ||
         'Hash algorithm selector. Choose the digest you want to calculate with the selected file.';
     }
     const id = element.tagName === 'LABEL' ? element.htmlFor : element.id;
+    const isWithin = selector => typeof element.matches === 'function' &&
+      (element.matches(selector) || Boolean(element.closest?.(selector)));
+    const stegoControlGuidance = {
+      stegoModeHide: 'Embed mode. Choose a carrier and one payload source, then encrypt and embed it. Images use PNG pixel embedding; other files have an encrypted block appended.',
+      stegoModeExtract: 'Extract mode. Choose the unchanged output carrier and the same access key used to embed the payload.',
+      stegoDropzone: 'Carrier picker. Choose one PNG or JPEG image, video, recording, or other file. PNG and JPEG use pixel embedding; JPEG output becomes PNG. Other files use appended data, which is not concealed.',
+      stegoCarrier: 'Choose one carrier file. PNG and JPEG images use pixel embedding; other files have encrypted payload data appended.',
+      stegoCapacityBar: 'Carrier capacity indicator. Image capacity is estimated from opaque pixels; other files can have up to four mebibytes appended. Check the carrier warning because appended data is not concealed.',
+      stegoCapacityValue: 'Estimated capacity for the selected carrier. Image capacity depends on opaque pixels; other files use appended data.',
+      stegoPayloadSection: 'Payload source. Choose either a text message or files, not both. One file keeps its format; multiple files or a folder are bundled into a ZIP.',
+      stegoText: 'Text payload. Enter the message to encrypt and embed. Choose either text or files, not both. The maximum plaintext payload is four mebibytes.',
+      stegoFilePicker: 'File payload picker. Add one file, multiple files, or a folder. A single file keeps its format; collections and folders are bundled into a ZIP.',
+      stegoChooseFiles: 'Choose one or more files to embed. A single file keeps its format; multiple files are bundled into a ZIP.',
+      stegoChooseFolder: 'Choose a folder to embed. Folder contents are bundled into a ZIP with their relative paths.',
+      stegoClearFiles: 'Clear the selected payload files and folder.',
+      stegoHide: 'Encrypt and embed the selected payload with the chosen workspace access key.',
+      stegoExtract: 'Extract and decrypt the payload from the selected unchanged carrier using the same workspace access key.',
+      stegoKeySetup: 'Separate workspace access-key settings. This key is independent of the main Access key and must be kept to extract payloads.',
+      stegoStatus: $('stegoStatus').textContent,
+      stegoCarrierStatus: $('stegoCarrierStatus').textContent,
+      stegoPayloadStatus: $('stegoPayloadStatus').textContent,
+      stegoExtractHint: $('stegoExtractHint').textContent,
+      stegoFileSelectionSummary: $('stegoFileSelectionSummary').textContent
+    };
+    if (stegoControlGuidance[id]) return stegoControlGuidance[id];
+    if (isWithin('.stego-security-card')) {
+      return 'Payloads are encrypted with authenticated AES-256-GCM before embedding. The selected workspace access key is required to recover them.';
+    }
+    if (isWithin('.stego-capacity-card')) {
+      return 'Carrier capacity. Image capacity depends on opaque pixels; other carriers have encrypted payload data appended, which is not concealed and may affect compatibility.';
+    }
+    if (isWithin('.stego-format-card')) {
+      return 'Supported workflow. PNG uses pixel embedding; JPEG input becomes PNG; other files use appended data. A single payload file keeps its format, while folders and multiple files recover as a ZIP.';
+    }
+    if (isWithin('.stego-warning')) {
+      return element.textContent.trim();
+    }
+    if (isWithin('.stego-picker-copy')) {
+      return 'Select one carrier. PNG and JPEG images use pixel embedding; JPEG becomes PNG. Other files have encrypted payload data appended, which is not concealed.';
+    }
+    if (isWithin('.stego-drop-hint')) {
+      return 'Drop files into the payload picker, or use Choose folder to preserve a folder structure.';
+    }
+    if (isWithin('.stego-section-label')) {
+      return element.textContent.trim();
+    }
+    const localizedHashControl = HASH_CONTROL_NARRATION[narrationLanguage]?.[id];
+    if (localizedHashControl) return localizedHashControl;
     if (id === 'signatureToolsSummary') {
       return SIGNATURE_EVENT_NARRATION[narrationLanguage]?.summary
         || SIGNATURE_EVENT_NARRATION.en.summary;
@@ -1073,8 +1220,17 @@ export function createAudioController({ isLocked }) {
       if (/message signed/i.test(status)) return SIGNATURE_EVENT_NARRATION[narrationLanguage]?.signed;
       return status || getControlNarration(id, narrationLanguage);
     }
-    if (id === 'keyStrengthMeter' || id === 'keyStrengthStatus' || id === 'keyStrengthGuidance') {
-      return getPassphraseStrengthResult() || getControlNarration(id, narrationLanguage);
+    if (id === 'stegoStatus' || id === 'stegoCarrierStatus' ||
+        id === 'stegoPayloadStatus' || id === 'stegoExtractHint' ||
+        id === 'stegoFileSelectionSummary') {
+      return $(id).textContent || getControlNarration(id, narrationLanguage);
+    }
+    if (id === 'keyStrengthMeter' || id === 'keyStrengthStatus' || id === 'keyStrengthGuidance' ||
+        id === 'stegoKeyStrengthMeter' || id === 'stegoKeyStrengthStatus' || id === 'stegoKeyStrengthGuidance') {
+      const separateKey = id.startsWith('stego');
+      return getPassphraseStrengthResult(separateKey
+        ?{keyId:'stegoAccessKey',lengthId:'stegoPassphraseLength'}
+        :undefined) || getControlNarration(id, narrationLanguage);
     }
     const controlNarration = getControlNarration(id, narrationLanguage);
     if (controlNarration) return controlNarration;
@@ -1154,6 +1310,11 @@ export function createAudioController({ isLocked }) {
       hashOutput: 'File check results. Each code helps compare a file with a copy you trust. Compare the whole code, not just the beginning.',
       passphraseLength: 'Generated passphrase length. Choose between 16 and 64 characters. Longer randomly generated passphrases are harder to guess; 24 characters is the recommended default.',
       generatePassphrase: 'Generate secure passphrase button. It uses browser cryptographic randomness to create a mixed-character access key and puts it in the access-key box. It is not saved for you, so store it securely before relying on it.',
+      stegoSeparateKey: 'Use a separate access key for the media and file payload workspace. When enabled, this key is independent of the main Access key and must be kept to recover payloads.',
+      stegoAccessKey: 'Separate media and file payload access key. Keep it securely and use the same key to recover the payload.',
+      stegoAccessKeyEye: 'Show or hide the separate media and file payload access key.',
+      stegoPassphraseLength: 'Required access-key length for new media and file payload encryption. Choose between 16 and 64 characters; 24 is recommended.',
+      stegoGeneratePassphrase: 'Generate secure passphrase button for the media and file payload workspace. It uses browser cryptographic randomness. Store the generated key securely; it is not saved for you.',
       keyStrengthMeter: 'Access-key quality meter. It gives a rough estimate based on length, character variety, repetition, and common sequences. It is not a password audit and cannot detect reused passphrases or personal information.',
       keyStrengthStatus: 'Access-key quality estimate. The score is a rough guide, not a password audit. Suggestions can flag selected length, character variety, repeated runs, and predictable sequences. Character groups are not a password requirement; prefer a long, unique, securely generated passphrase.',
       signatureToolsSummary: SIGNATURE_EVENT_NARRATION[narrationLanguage]?.summary
@@ -1190,7 +1351,9 @@ export function createAudioController({ isLocked }) {
     if (id === 'fileHint') return guides.fileInput;
     if (id === 'hashDropzone' || id === 'hashInput' || id === 'hashSelected' || id === 'hashOutput' ||
         id === 'exportHashResults' || id === 'hashProgress' ||
-        id === 'passphraseLength' || id === 'generatePassphrase' || id === 'expectedHashAlgorithm' || id === 'expectedHash' ||
+        id === 'passphraseLength' || id === 'generatePassphrase' || id === 'stegoSeparateKey' ||
+        id === 'stegoAccessKey' || id === 'stegoAccessKeyEye' || id === 'stegoPassphraseLength' ||
+        id === 'stegoGeneratePassphrase' || id === 'expectedHashAlgorithm' || id === 'expectedHash' ||
         id === 'expectedHashHint' || id === 'signMessage' || id === 'signingKeyMode' ||
         id === 'ecdsaPublicKey' || id === 'ecdsaPrivateKey' || id === 'generateEcdsa' ||
         id === 'copyEcdsaPublic' || id === 'copyEcdsaPrivate' || id === 'verifySignature' ||
@@ -1214,19 +1377,20 @@ export function createAudioController({ isLocked }) {
 
   function announceMessage(message) {
     if (!narrationRunning || isLocked() || document.hidden) return;
-    if (!message) return;
+    const speechText = String(message || '').replace(/\s+/g, ' ').trim();
+    if (!speechText) return;
     narrationGeneration++;
     const generation = narrationGeneration;
     window.speechSynthesis.cancel();
     try {
       voice = voice || pickVoice(narrationLanguage);
-      const utterance = new window.SpeechSynthesisUtterance(message);
+      const utterance = new window.SpeechSynthesisUtterance(speechText);
       if (voice) utterance.voice = voice;
       utterance.lang = NARRATION_LANGUAGES[narrationLanguage].speechTag;
-      utterance.rate = .82;
-      utterance.pitch = .75;
-      utterance.volume = .85;
-      narrationText.textContent = `"${message}"`;
+      utterance.rate = .92;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      narrationText.textContent = `"${speechText}"`;
       narration.classList.add('active');
       light.classList.add('active');
       utterance.onend = () => {
@@ -1248,12 +1412,12 @@ export function createAudioController({ isLocked }) {
     const target = event.target;
     // Find a nearby interactive control first; prefer a selector that includes the hash dropzone
     const element = target?.closest?.(
-      'input,textarea,select,button,label,summary,#signatureStatus,.field-hint,.key-strength-status,.key-strength-guidance,meter,[role="progressbar"],.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
+      'input,textarea,select,button,label,summary,#signatureStatus,#stegoStatus,#stegoCarrierStatus,#stegoPayloadStatus,#stegoExtractHint,#stegoFileSelectionSummary,#stegoCapacityValue,.field-hint,.key-strength-status,.key-strength-guidance,meter,progress,[role="progressbar"],.stego-detail,.stego-extract-hint,.stego-warning,.stego-security-card,.stego-capacity-card,.stego-format-card,.stego-picker-copy,.stego-file-picker-copy,.stego-drop-hint,.stego-section-label,.otext,.audio-status,.hash-dropzone,.hash-selected,.hash-output'
     );
     if (!element) return;
     // Ignore narration toggle and selects opening
     if (element.id === 'voxB' || element.tagName === 'SELECT') return;
-    if (element.id === 'generatePassphrase') return;
+    if (element.id === 'generatePassphrase' || element.id === 'stegoGeneratePassphrase') return;
     // If this was a hash-algorithm click (a checkbox inside the algorithms area), ignore here so
     // the change handler can announce the algorithm change explicitly.
     const hashAlgorithmInput = element.name === 'hashAlgorithm'
@@ -1275,6 +1439,38 @@ export function createAudioController({ isLocked }) {
     return true;
   }
 
+  function announceStegoStatus(status, detail = '') {
+    const messages = {
+      carrierRemoved: 'The carrier selection was cleared.',
+      carrierAppendReady: 'Carrier inspected. Up to four mebibytes can be appended as encrypted data; it is not concealed and may affect compatibility.',
+      carrierInvalid: 'The selected carrier could not be inspected. Choose a supported image or a file within the carrier size limit.',
+      jpegExtractUnavailable: 'JPEG is accepted as a source image for hiding, but extraction requires the PNG output created by this tool.',
+      embedMode: 'Embed mode selected. Choose a carrier, one payload source, and an access key.',
+      extractMode: 'Extract mode selected. Choose the unchanged output carrier and the same access key used to embed the payload.',
+      separateKeyEnabled: 'Separate workspace access key enabled. Enter or generate that key, and keep it to recover the payload.',
+      sharedKeyEnabled: 'Separate workspace key disabled. The main Access key is selected for this workspace.',
+      carrierRequired: 'Choose one carrier file before continuing.',
+      keyRequired: 'Enter the access key selected for this workspace.',
+      keyTooShort: 'The access key must contain at least 10 characters to extract a payload.',
+      keyLength: 'The access key does not match the required length for new payload encryption.',
+      folderRequired: 'Use the folder picker to add a folder and preserve its structure.',
+      tooManyPayloadFiles: 'A payload collection can contain no more than 1,000 files.',
+      oneCarrierRequired: 'Choose one carrier file at a time.',
+      operationFailed: 'The payload operation could not be completed. Review the message in the workspace and try again.',
+      embedded: 'The payload was encrypted and embedded in the image. Keep the output unchanged and retain the access key.',
+      appended: 'The payload was encrypted and appended to a copy of the carrier. Appended data is not concealed and may affect compatibility.',
+      extracted: 'The payload was authenticated, decrypted, and downloaded. Keep the access key secure.'
+    };
+    const message = status === 'imageCarrierReady'
+      ?detail
+      :status === 'operationFailed'
+        ?$('stegoStatus').textContent || 'The payload operation failed. Review the workspace and try again.'
+        :messages[status];
+    if (!message) return false;
+    announceMessage(message);
+    return true;
+  }
+
   function announceLanguageChanged(language) {
     if (!NARRATION_LANGUAGES[language]) return false;
     announceMessage(LANGUAGE_CHANGE_NARRATION[language]);
@@ -1282,12 +1478,13 @@ export function createAudioController({ isLocked }) {
   }
 
   function announceHashAlgorithm(algorithm, selected = true) {
-    const guide = HASH_ALGORITHM_GUIDES[algorithm];
+    const guide = HASH_ALGORITHM_GUIDES[narrationLanguage]?.[algorithm]
+      || HASH_ALGORITHM_GUIDES.en[algorithm];
     if (!guide) return false;
     const label = HASH_ALGORITHM_NAMES[algorithm];
     const message = selected
       ? guide
-      : `${label} is unchecked, so it will not be included in the file check.`;
+      : (HASH_UNCHECKED_NARRATION[narrationLanguage] || HASH_UNCHECKED_NARRATION.en)(label);
     announceMessage(message);
     return true;
   }
@@ -1324,11 +1521,11 @@ export function createAudioController({ isLocked }) {
     return true;
   }
 
-  function announcePassphraseLength(length) {
+  function announcePassphraseLength(length, {keyId = 'key', lengthId = 'passphraseLength'} = {}) {
     if (![16, 20, 24, 32, 40, 64].includes(length)) return false;
-    const guidance=getContextualGuide($('passphraseLength'))||
+    const guidance=getContextualGuide($(lengthId))||
       'Generated passphrase length. Choose between 16 and 64 characters. Longer random passphrases are harder to guess; 24 characters is the recommended default.';
-    const strengthResult = getPassphraseStrengthResult({ includeLength: false });
+    const strengthResult = getPassphraseStrengthResult({ includeLength: false, keyId, lengthId });
     announceMessage(`${guidance} Selected length: ${length} characters.${strengthResult ? ` ${strengthResult}` : ''}`);
     return true;
   }
@@ -1436,6 +1633,11 @@ export function createAudioController({ isLocked }) {
   $('passphraseLength').addEventListener('change', () => {
     announcePassphraseLength(Number($('passphraseLength').value));
   });
+  $('stegoPassphraseLength').addEventListener('change', () => {
+    announcePassphraseLength(Number($('stegoPassphraseLength').value), {
+      keyId:'stegoAccessKey',lengthId:'stegoPassphraseLength'
+    });
+  });
   $('expectedHashAlgorithm').addEventListener('change', announceExpectedHashAlgorithm);
   if (speech) window.speechSynthesis.onvoiceschanged = () => { voice = pickVoice(narrationLanguage); };
   document.addEventListener('click', announceContext);
@@ -1453,6 +1655,7 @@ export function createAudioController({ isLocked }) {
     setNarrationRsaKeySize,
     setNarrationLanguage,
     announceStatus,
+    announceStegoStatus,
     announceLanguageChanged,
     announceHashAlgorithm,
     announceHashDigestCopy,

@@ -18,10 +18,11 @@
 
 - **Encrypt text locally:** AES-GCM for passphrase-based messages, RSA-OAEP hybrid for recipients, plus clearly limited compatibility modes.
 - **Protect files:** Chunked AES-256-GCM file encryption supports files up to 1 GiB.
+- **Carry encrypted payloads in media and files:** Conceal payload bits in PNG pixels (JPEG sources become PNG); for video, audio, and other files, append an encrypted block. Appending is not concealment and may affect compatibility.
 - **Check file integrity:** Calculate and compare local MD5, SHA-1, SHA-256, or SHA-512 digests; export results as CSV.
 - **Verify signed messages:** Optionally sign encrypted tokens with ECDSA P-256 and verify a signature before decryption.
 - **Manage keys deliberately:** Generate RSA encryption and ECDSA signing keys, inspect public-key fingerprints, and choose non-extractable memory-only keys or explicit PEM backups.
-- **Get usable guidance:** Generate passphrases, enforce a selected length for new password-based encryption, view an estimate (not an audit), and optionally hear multilingual narration.
+- **Get usable guidance:** Generate passphrases, enforce a selected length for new password-based encryption, view an estimate (not an audit), and optionally hear multilingual narration with language-matched voices where available.
 - **Handle legacy data:** Decrypt supported older formats and migrate Grumpy v2 messages. Grumpy v2 is insecure and is for compatibility only.
 
 > [!CAUTION]
@@ -74,6 +75,9 @@ AES-GCM key-size options are the size of the derived AES key, not the passphrase
 | New file encryption | 1 GiB plaintext maximum, processed in 4 MiB chunks |
 | File hashing | 256 MiB per file; hashing runs in a Worker; SHA digests require full-file memory and MD5 is incremental |
 | Legacy HWF1 file decryption | 1 MiB plaintext maximum |
+| Embedded payload | 4 MiB plaintext maximum; PNG/JPEG images up to 16 megapixels / 16,384 pixels per side / 32 MiB; other carrier files up to 1 GiB |
+| Image payload capacity | Calculated from fully opaque PNG pixels; encryption and framing overhead also consume capacity |
+| File collections | Up to 1,000 files; multiple files and folders are packaged as an uncompressed ZIP, while a single file keeps its format |
 | Direct RSA and RSA3 | Short-message capacity depends on RSA modulus size and UTF-8 byte length |
 
 Direct RSA/RSA3 generated-key limits are 190 bytes for RSA-2048, 318 bytes for RSA-3072, and 446 bytes for RSA-4096. Imported key limits are based on the actual key, not the generated-key size selector. See the guide's [limits and behavior](docs/PROJECT_GUIDE.md#limits-and-behavior) section for all details.
@@ -99,11 +103,19 @@ The hash workbench reads selected files in the browser and supports:
 
 Select files by picker or drag and drop. Hashing runs in a same-origin Web Worker to keep the interface responsive. MD5 is incremental and processed in 4 MiB chunks; when it is the only selected algorithm, the Worker reads file slices instead of loading the entire file. Web Crypto SHA digests require the complete file in memory. Hashing is limited to 256 MiB per file to reduce memory pressure for SHA calculations. This hashing limit is separate from the 1 GiB file-encryption limit. MD5 runs in the Worker for compatibility but is not suitable for security-sensitive verification. Enter an expected digest to see **Match** or **Mismatch**; its algorithm is calculated even if that algorithm's output checkbox is off. A match only means the values are equal—it does not authenticate the source of the expected digest. Copy individual results or export the current report as CSV. Hashing does not encrypt, upload, or change a file.
 
+## Image, media, and file payloads
+
+In **Media & file payload workspace**, choose one payload source—text, one file, multiple files, or a folder—and encrypt it with authenticated AES-256-GCM. By default the workspace uses the main **Access key**. The optional **Use a separate access key for this workspace** control provides an independent key, selected-length requirement, quality estimate, and secure generator. Choose the same key and value when extracting; keys are never spoken by narration. Text is recovered as `hidden-message.txt`. A single file keeps its original format and filename. ZIP packaging is used only for multiple files or a folder, so the collection and relative folder paths can be recovered together; extraction downloads the ZIP, which you open yourself.
+
+PNG images use pixel-level embedding. JPEG sources are decoded and converted into a new PNG because JPEG recompression would destroy hidden bits; extract from the generated PNG, not the original JPEG. For video, audio, and other files, the encrypted payload is appended to a copy of the carrier with a footer that this app uses for extraction. This is not steganographic concealment: the appended data may be visible in the file size and can affect compatibility. Use a copy and keep the generated output unchanged.
+
+Image carriers are limited to 16 megapixels, 16,384 pixels per side, and 32 MiB. Other carrier files may be up to 1 GiB. Plaintext payloads are limited to 4 MiB, with no more than 1,000 files in a collection. PNG capacity depends on fully opaque pixels; the displayed estimate is for encrypted data, so encryption and framing overhead are included and the usable payload can be smaller than the nominal capacity. Capacity is checked before encryption. PNG pixel embedding is fragile: editing, resizing, screenshots, conversion, or recompression can destroy the payload. Appended payloads are encrypted but not concealed, may affect media or document compatibility, and are not guaranteed to survive conversion or editing. Neither technique makes the carrier undetectable or authenticates its sender. All processing is local; there is no server upload.
+
 ## Workspace, narration, and privacy
 
-Only one cryptographic operation runs at a time. Relevant controls are disabled while an operation is pending. Editing message/key inputs or changing relevant methods and key sizes invalidates stale message output and its download. **Clear** removes current message and result data, selected files, hash results, and file status, but does not clear the active access key or loaded keys.
+Only one cryptographic operation runs at a time. Relevant controls are disabled while an operation is pending. Editing message/key inputs or changing relevant methods and key sizes invalidates stale message output and its download. **Clear** removes current message and result data, selected files, hash results, and file status, but does not clear the main Access key or loaded cryptographic keys. It does clear the optional media-workspace key and turns off that separate-key option.
 
-The optional browser speech-synthesis feature supports English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, and French. It provides selected-method, control, operation, hash, and signature guidance; it does not read messages, keys, or decrypted output aloud. Voice availability depends on the browser and operating system.
+The optional browser speech-synthesis feature supports English, Yoruba, Igbo, Hausa, Nigerian Pidgin, Spanish, and French. It provides selected-method, control, operation, hash, signature, and media-workspace guidance, including carrier/mode/key-source changes, capacity, and operation outcomes. It does not read messages, keys, or decrypted output aloud. Voice availability depends on the browser and operating system.
 
 The workspace lock clears sensitive fields after five minutes of tracked inactivity and during page lifecycle lock handling. It retains the RSA public key but clears private keys and other sensitive state. The lock has no password, is not an authentication boundary, and cannot guarantee secure erasure. It is distinct from **Clear** and does not delete files already downloaded.
 

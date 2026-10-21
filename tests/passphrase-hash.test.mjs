@@ -87,7 +87,7 @@ test('strength meter connects accessible markup, live updates, generated keys, a
   assert.ok(app.includes("keyStrengthMeter.setAttribute('aria-valuetext',estimate?`${estimate.level} estimate, ${score} out of 100`:'No estimate');"));
   assert.match(app, /\$\('key'\)\.addEventListener\('input'.*updatePassphraseStrength\(\)/);
   assert.match(app, /\$\('key'\)\.addEventListener\('blur',\(\)=>audio\.announcePassphraseResult\(\)\)/);
-  assert.match(app, /\$\('passphraseLength'\)\.addEventListener\('change',updatePassphraseStrength\)/);
+  assert.match(app, /\$\('passphraseLength'\)\.addEventListener\('change',\(\)=>\{updatePassphraseStrength\(\);updateActionButtons\(\)\}\)/);
   assert.match(app, /key\.value=generatePassphrase\(Number\(\$\('passphraseLength'\)\.value\)\);[\s\S]*?updatePassphraseStrength\(\)/);
   assert.match(app, /audio\.announcePassphraseResult\(\{generated:true\}\)/);
   assert.match(app, /audio\.announcePassphraseGenerationError\(\)/);
@@ -107,6 +107,7 @@ test('passphrase generator validates configuration and cryptographic randomness'
 test('strength estimate identifies empty, repeated, and longer varied access keys', () => {
   assert.equal(estimatePassphraseStrength(''), null);
   assert.equal(estimatePassphraseStrength('aaaaaaaaaaaaaaaa').level, 'weak');
+  assert.doesNotThrow(() => estimatePassphraseStrength('\n'.repeat(24), 24));
   assert.ok(estimatePassphraseStrength('copper-forest-7!').score > 50);
   const generated = estimatePassphraseStrength(generatePassphrase(24), 24);
   assert.equal(generated.level, 'strong');
@@ -150,6 +151,7 @@ test('passphrase length enforcement counts Unicode code points exactly', () => {
   assert.equal(countPassphraseCharacters('a'.repeat(23)), 23);
   assert.equal(countPassphraseCharacters('a'.repeat(25)), 25);
   assert.equal(countPassphraseCharacters('a'.repeat(23) + '😀'), 24);
+  assert.equal(countPassphraseCharacters('😀'.repeat(5)), 5);
 });
 
 test('expected digest normalization validates algorithm-specific hex length and case', () => {
