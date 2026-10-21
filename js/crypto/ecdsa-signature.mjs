@@ -1,4 +1,7 @@
-import { b64, concat, decoder, encoder, requireCrypto, subtle } from './shared.mjs';
+import {
+  AES_TAG, LEGACY_AES_TAG, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG,
+  b64, concat, decoder, encoder, requireCrypto, subtle, unb64url
+} from './shared.mjs';
 import { readPem, writePem } from './pem.mjs';
 
 export const SIGNED_MESSAGE_TAG = 'SIG1.';
@@ -6,7 +9,7 @@ export const MAX_SIGNED_MESSAGE_CHARS = 200_000;
 const SIGNATURE_DOMAIN = encoder.encode('Hex Watch Cipher signed message v1');
 const SIGNATURE_BYTES = 64;
 const HEADER_BYTES = 5;
-const SUPPORTED_TOKEN_TAGS = ['CT2.', 'CT1.', 'CBC1.', 'RSA1.', 'RSA2.', 'RSA3.'];
+const SUPPORTED_TOKEN_TAGS = [AES_TAG, LEGACY_AES_TAG, CBC_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG];
 
 function isEncryptedToken(token) {
   if (typeof token !== 'string') return false;
@@ -25,8 +28,8 @@ function assertP256Key(key, type, usage) {
 }
 
 async function importPrivateKey(value) {
-  if (typeof value !== 'string') return assertP256Key(value, 'private', 'sign');
   try {
+    if (typeof value !== 'string') return assertP256Key(value, 'private', 'sign');
     return assertP256Key(await subtle.importKey(
       'pkcs8',
       readPem(value, 'PRIVATE KEY'),
@@ -41,8 +44,8 @@ async function importPrivateKey(value) {
 }
 
 async function importPublicKey(value) {
-  if (typeof value !== 'string') return assertP256Key(value, 'public', 'verify');
   try {
+    if (typeof value !== 'string') return assertP256Key(value, 'public', 'verify');
     return assertP256Key(await subtle.importKey(
       'spki',
       readPem(value, 'PUBLIC KEY'),
@@ -53,23 +56,6 @@ async function importPublicKey(value) {
   } catch (error) {
     if (error.message === 'keytoolarge') throw error;
     throw new Error('signingkeyformat');
-  }
-}
-
-function decodeBase64Url(value) {
-  if (!value || !/^[A-Za-z0-9_-]+$/.test(value) || value.length % 4 === 1) {
-    throw new Error('format');
-  }
-  try {
-    const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
-    const bytes = Uint8Array.from(
-      atob(base64 + '='.repeat((4 - base64.length % 4) % 4)),
-      character => character.charCodeAt(0)
-    );
-    if (b64(bytes) !== value) throw new Error('format');
-    return bytes;
-  } catch {
-    throw new Error('format');
   }
 }
 
@@ -93,10 +79,14 @@ export async function generateEcdsaKeyPair({ exportable = false } = {}) {
 export async function fingerprintEcdsaPublicKey(value) {
   requireCrypto();
   const key = await importPublicKey(value);
-  const digest = new Uint8Array(await subtle.digest(
-    'SHA-256',
-    await subtle.exportKey('spki', key)
-  ));
+  let spki;
+  try {
+    spki = await subtle.exportKey('spki', key);
+  } catch {
+    // e.g. a caller-supplied non-extractable CryptoKey
+    throw new Error('signingkeyformat');
+  }
+  const digest = new Uint8Array(await subtle.digest('SHA-256', spki));
   return Array.from(digest, byte => byte.toString(16).padStart(2, '0').toUpperCase())
     .join('')
     .match(/.{1,4}/g)
@@ -134,7 +124,7 @@ export async function verifyMessageToken(signedToken, publicKeyValue) {
     !signedToken.startsWith(SIGNED_MESSAGE_TAG)
   ) throw new Error('format');
 
-  const envelope = decodeBase64Url(signedToken.slice(SIGNED_MESSAGE_TAG.length));
+  const envelope = unb64url(signedToken.slice(SIGNED_MESSAGE_TAG.length));
   if (envelope.length < HEADER_BYTES + SIGNATURE_BYTES || envelope[0] !== 1) {
     throw new Error('format');
   }

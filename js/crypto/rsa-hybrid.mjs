@@ -126,6 +126,14 @@ export async function decryptRsaThenAes(token, pem, password) {
   const raw = decodeToken(token, RSA_AES_TAG, 1 + 16 + 12 + MAX_RSA_WRAPPED_BYTES + 16);
   const headerLength = 1 + 16 + 12;
   if (raw.length < headerLength + 256 + 16 || raw[0] !== 1) throw new Error('format');
+  // Validate the private key and the token size first: a malformed or wrong-size key is rejected
+  // cheaply instead of after a full PBKDF2 derivation.
+  const privateKey = validateRsaPrivateKey(
+    typeof pem === 'string' ? await importRsaKey(pem, 'pkcs8', 'PRIVATE KEY', 'decrypt') : pem
+  );
+  if (raw.length !== headerLength + privateKey.algorithm.modulusLength / 8 + 16) {
+    throw new Error('format');
+  }
   const rsaCiphertext = await decryptOrAuth(
     {
       name: 'AES-GCM',
@@ -134,9 +142,6 @@ export async function decryptRsaThenAes(token, pem, password) {
     },
     await deriveAesKey(password, raw.slice(1, 17), 256),
     raw.slice(headerLength)
-  );
-  const privateKey = validateRsaPrivateKey(
-    typeof pem === 'string' ? await importRsaKey(pem, 'pkcs8', 'PRIVATE KEY', 'decrypt') : pem
   );
   if (rsaCiphertext.byteLength !== privateKey.algorithm.modulusLength / 8) throw new Error('format');
   let plaintext;
@@ -159,6 +164,7 @@ export async function encryptRsaHybrid(text, pem) {
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
   const aesKey = await subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt']);
   const wrappedKey = new Uint8Array(await subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, rawKey));
+  rawKey.fill(0); // importKey/encrypt copied it; do not leave the session key lying in memory
   if (wrappedKey.length > MAX_RSA_WRAPPED_BYTES) throw new Error('keylarge');
   const ciphertext = new Uint8Array(await subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: encoder.encode(RSA_TAG) },
@@ -187,6 +193,8 @@ export async function decryptRsaHybrid(token, pem) {
     aesKey = await subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['decrypt']);
   } catch {
     throw new Error('auth');
+  } finally {
+    new Uint8Array(rawKey).fill(0);
   }
   let plaintext;
   try {

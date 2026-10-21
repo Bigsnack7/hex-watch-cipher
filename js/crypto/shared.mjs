@@ -1,5 +1,7 @@
 export const encoder = new TextEncoder();
-export const decoder = new TextDecoder('utf-8', { fatal: true });
+// ignoreBOM: true keeps a leading U+FEFF in decrypted text. The default silently strips it,
+// so a message that starts with a BOM would not round-trip.
+export const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 export const subtle = globalThis.crypto?.subtle;
 
 export const AES_TAG = 'CT2.';
@@ -28,6 +30,8 @@ export function assertMessageSize(text) {
 }
 
 export function normalizeKey(password) {
+  // An empty or non-string passphrase would derive a key from nothing; reject it at the library level.
+  if (typeof password !== 'string' || password.length === 0) throw new Error('short');
   const normalized = password.normalize('NFKC');
   if (encoder.encode(normalized).length > MAX_KEY_BYTES) throw new Error('keytoolarge');
   return encoder.encode(normalized);
@@ -41,7 +45,7 @@ export function b64(bytes) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
-function unb64url(value) {
+export function unb64url(value) {
   if (!value || !/^[A-Za-z0-9_-]+$/.test(value) || value.length % 4 === 1) {
     throw new Error('format');
   }
@@ -57,6 +61,7 @@ function unb64url(value) {
 }
 
 export function decodeToken(token, prefix, maxBytes, maxTokenChars = MAX_TOKEN_CHARS) {
+  if (typeof token !== 'string') throw new Error('format');
   if (token.length > maxTokenChars) throw new Error('toolarge');
   if (!token.startsWith(prefix)) throw new Error('format');
   const bytes = unb64url(token.slice(prefix.length));
