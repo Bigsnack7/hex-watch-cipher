@@ -4,7 +4,8 @@ import {
   createAudioController,
   getNarrationGuide,
   NARRATION_GUIDES,
-  NARRATION_LANGUAGES
+  NARRATION_LANGUAGES,
+  selectNarrationVoice
 } from '../js/ui/audio.mjs';
 
 const expectedModes = {
@@ -34,6 +35,20 @@ test('AES narration reflects the selected derived-key size', () => {
     assert.match(getNarrationGuide('aes', 'en', keyBits)[0], new RegExp(`AES-${keyBits}-GCM`));
     assert.match(getNarrationGuide('aes', 'fr', keyBits)[0], new RegExp(`AES-${keyBits}-GCM`));
   }
+});
+
+test('narration voice selection prefers the requested language and never an unrelated voice', () => {
+  const voices = [
+    { name: 'Remote French', lang: 'fr-FR', localService: false },
+    { name: 'Local French', lang: 'fr-FR', localService: true },
+    { name: 'Canadian French', lang: 'fr-CA', localService: true },
+    { name: 'British English', lang: 'en-GB', localService: true }
+  ];
+  assert.equal(selectNarrationVoice(voices, 'fr'), voices[1]);
+  assert.equal(selectNarrationVoice(voices, 'yo'), null);
+  assert.equal(selectNarrationVoice(voices, 'pcm'), voices[3]);
+  assert.equal(selectNarrationVoice([], 'en'), null);
+  assert.equal(selectNarrationVoice(null, 'unknown'), null);
 });
 
 test('localized guides cover every cipher and include supported speech languages', () => {
@@ -70,8 +85,8 @@ test('clicked controls speak guidance for the currently selected method', async 
   const originalDocument = globalThis.document;
   const makeElement = id => ({
     id,
-    tagName: id === 'mode' || id === 'passphraseLength' || id === 'expectedHashAlgorithm' ? 'SELECT' : 'BUTTON',
-    value: id === 'mode' ? 'aes' : id === 'passphraseLength' ? '24' : '',
+    tagName: id === 'mode' || id === 'passphraseLength' || id === 'stegoPassphraseLength' || id === 'expectedHashAlgorithm' ? 'SELECT' : 'BUTTON',
+    value: id === 'mode' ? 'aes' : id === 'passphraseLength' || id === 'stegoPassphraseLength' ? '24' : '',
     textContent: '',
     attributes: new Map(),
     classList: { add() {}, remove() {} },
@@ -131,6 +146,9 @@ test('clicked controls speak guidance for the currently selected method', async 
     assert.equal(utterances.length, beforeSelectClick, 'opening a select must not narrate guidance for the old selection');
     change('mode', 'cbc');
     assert.match(utterances.at(-1).text, /^AES-CBC with HMAC, compatibility mode\./);
+    assert.equal(utterances.at(-1).rate, 0.92);
+    assert.equal(utterances.at(-1).pitch, 1);
+    assert.equal(utterances.at(-1).volume, 1);
     change('mode', 'aes');
     assert.match(utterances.at(-1).text, /^AES-GCM, passphrase-based\./);
     assert.match(utterances.at(-1).text, /AES-256-GCM/);
@@ -169,9 +187,54 @@ test('clicked controls speak guidance for the currently selected method', async 
     assert.match(utterances.at(-1).text, /rough estimate, not a password audit/);
     assert.equal((utterances.at(-1).text.match(/Use a unique passphrase/g) || []).length, 0);
     assert.doesNotMatch(utterances.at(-1).text, new RegExp(generatedKey));
+    change('stegoPassphraseLength', 32);
+    assert.match(utterances.at(-1).text, /Required access-key length for new media and file payload encryption/);
+    assert.match(utterances.at(-1).text, /Selected length: 32 characters/);
+    elements.get('stegoAccessKey').value = generatedKey;
+    assert.equal(controller.announcePassphraseResult({
+      generated: true, keyId: 'stegoAccessKey', lengthId: 'stegoPassphraseLength'
+    }), true);
+    assert.match(utterances.at(-1).text, /32 of 32 characters/);
+    assert.doesNotMatch(utterances.at(-1).text, new RegExp(generatedKey));
     click('keyStrengthStatus');
     assert.match(utterances.at(-1).text, /Access-key estimate: good, 75 out of 100/);
     assert.match(utterances.at(-1).text, /avoid repeating a character pattern/);
+    click('stegoKeyStrengthStatus');
+    assert.match(utterances.at(-1).text, /Access-key estimate:/);
+    click('stegoCapacityBar');
+    assert.match(utterances.at(-1).text, /Carrier capacity indicator/);
+    click('stegoModeHide');
+    assert.match(utterances.at(-1).text, /Embed mode/);
+    assert.equal(controller.announceStegoStatus('embedded'), true);
+    assert.match(utterances.at(-1).text, /encrypted and embedded in the image/);
+    assert.doesNotMatch(utterances.at(-1).text, new RegExp(generatedKey));
+    assert.equal(controller.announceStegoStatus('imageCarrierReady','PNG image selected. Estimated pixel payload capacity: 8 KB.'), true);
+    assert.match(utterances.at(-1).text, /Estimated pixel payload capacity: 8 KB/);
+    assert.equal(controller.announceStegoStatus('separateKeyEnabled'), true);
+    assert.match(utterances.at(-1).text, /Separate workspace access key enabled/);
+    assert.equal(controller.announceStegoStatus('sharedKeyEnabled'), true);
+    assert.match(utterances.at(-1).text, /main Access key is selected/);
+    assert.equal(controller.announceStegoStatus('extractMode'), true);
+    assert.match(utterances.at(-1).text, /Extract mode selected/);
+    assert.equal(controller.announceStegoStatus('carrierRemoved'), true);
+    assert.match(utterances.at(-1).text, /carrier selection was cleared/);
+    assert.equal(controller.announceStegoStatus('carrierAppendReady'), true);
+    assert.match(utterances.at(-1).text, /four mebibytes can be appended/);
+    assert.equal(controller.announceStegoStatus('carrierInvalid'), true);
+    assert.match(utterances.at(-1).text, /carrier could not be inspected/);
+    assert.equal(controller.announceStegoStatus('jpegExtractUnavailable'), true);
+    assert.match(utterances.at(-1).text, /extraction requires the PNG output/);
+    assert.equal(controller.announceStegoStatus('appended'), true);
+    assert.match(utterances.at(-1).text, /Appended data is not concealed/);
+    assert.equal(controller.announceStegoStatus('extracted'), true);
+    assert.match(utterances.at(-1).text, /authenticated, decrypted, and downloaded/);
+    assert.equal(controller.announceStegoStatus('unknown-event'), false);
+    const stegoStatus = document.getElementById('stegoStatus');
+    stegoStatus.textContent = 'Unable to decrypt this payload. Check the access key and carrier.';
+    documentListeners.get('click')({ type: 'click', target: stegoStatus });
+    assert.match(utterances.at(-1).text, /Unable to decrypt this payload/);
+    assert.equal(controller.announceStegoStatus('operationFailed'), true);
+    assert.match(utterances.at(-1).text, /Unable to decrypt this payload/);
     const beforeExpectedAlgorithmClick = utterances.length;
     click('expectedHashAlgorithm', 'SELECT');
     assert.equal(utterances.length, beforeExpectedAlgorithmClick, 'opening an algorithm selector must not narrate guidance for the previous value');
@@ -653,15 +716,28 @@ test('hash calculator controls and completion statuses are announced', async () 
       }
     });
     assert.match(utterances.at(-1).text, /File check area/);
-    assert.match(utterances.at(-1).text, /does not send them anywhere/);
+    assert.match(utterances.at(-1).text, /calculate their digests on this device/);
 
     controller.announceHashAlgorithm('sha256');
-    assert.match(utterances.at(-1).text, /SHA two fifty-six is checked/);
-    assert.match(utterances.at(-1).text, /does not hide the file or prove who made it/);
-    assert.match(utterances.at(-1).text, /compare the full code shown here with a code from a source you trust/);
+    assert.match(utterances.at(-1).text, /SHA two fifty-six creates a digest for checking a file/);
+    assert.match(utterances.at(-1).text, /compare the complete digest with one from a source you trust/);
 
     for (const language of Object.keys(NARRATION_LANGUAGES)) {
       controller.setNarrationLanguage(language);
+      controller.announceHashAlgorithm('md5');
+      assert.equal(utterances.at(-1).lang, NARRATION_LANGUAGES[language].speechTag);
+      const localizedMd5Guides = {
+        en: /MD5 creates a short file digest/,
+        yo: /MD5 ń ṣe ààmì fáìlì/,
+        ig: /MD5 na-emepụta akara faịlụ/,
+        ha: /MD5 yana ƙirƙirar gajeren lambar fayil/,
+        pcm: /MD5 dey make short file code/,
+        es: /MD5 crea un resumen corto/,
+        fr: /MD5 crée une courte empreinte/
+      };
+      assert.match(utterances.at(-1).text, localizedMd5Guides[language]);
+      controller.announceHashAlgorithm('md5', false);
+      assert.doesNotMatch(utterances.at(-1).text, /is unchecked, so it will not be included/i);
       assert.equal(controller.announceStatus('hashSelected'), true, `${language} selection status`);
       assert.equal(controller.announceStatus('hashCalculated'), true, `${language} completion status`);
       assert.equal(controller.announceStatus('hashFailed'), true, `${language} failure status`);
@@ -686,17 +762,16 @@ test('hash calculator controls and completion statuses are announced', async () 
     assert.equal(controller.announceHashVerification('unknown', 0, 0, 0), false);
     assert.equal(controller.announceHashVerification('sha256', -1, 0, 0), false);
     for (const [algorithm, expected] of [
-      ['md5', /MD5 is checked/],
-      ['sha1', /SHA one is checked/],
-      ['sha256', /SHA two fifty-six is checked/],
-      ['sha512', /SHA five twelve is checked/]
+      ['md5', /MD5 creates a short file digest/],
+      ['sha1', /SHA one is kept for compatibility/],
+      ['sha256', /SHA two fifty-six creates a digest/],
+      ['sha512', /SHA five twelve creates a longer file digest/]
     ]) {
       assert.equal(controller.announceHashAlgorithm(algorithm), true);
       assert.match(utterances.at(-1).text, expected);
-      assert.match(utterances.at(-1).text, /To use it here/);
     }
     assert.equal(controller.announceHashAlgorithm('md5', false), true);
-    assert.match(utterances.at(-1).text, /MD5 is unchecked, so it will not be included in the file check/);
+    assert.match(utterances.at(-1).text, /MD5 is unchecked and will not be included in the file check/);
     assert.equal(controller.announceHashAlgorithm('unknown'), false);
     controller.reset();
   } finally {

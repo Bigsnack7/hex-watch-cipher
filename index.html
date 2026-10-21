@@ -186,6 +186,137 @@
         </div>
         <p id="fileStatus" class="field-hint" role="status" aria-live="polite" aria-atomic="true"></p>
       </section>
+      <section class="file-tools stego-tools" aria-labelledby="stego-title">
+        <div class="panel-heading">
+          <div>
+            <span class="stego-eyebrow">PRIVATE · LOCAL PROCESSING</span>
+            <h2 id="stego-title">Media &amp; file payload workspace</h2>
+            <p>Encrypt a payload into PNG pixels (JPEG sources become PNG), or append it to a video, recording, or other file for later recovery. By default, this uses the Access key above.</p>
+          </div>
+        </div>
+        <div class="stego-mode-switch" role="group" aria-label="Payload action">
+          <button type="button" id="stegoModeHide" class="stego-mode-button" aria-pressed="true">Embed a payload</button>
+          <button type="button" id="stegoModeExtract" class="stego-mode-button" aria-pressed="false">Extract a payload</button>
+        </div>
+        <div class="stego-workspace">
+          <div class="stego-form-column">
+            <div class="stego-section-label"><span>01</span> Carrier file</div>
+            <label class="stego-picker" id="stegoDropzone" for="stegoCarrier" tabindex="0" aria-label="Choose or drop an image, video, recording, or other carrier file">
+              <span class="stego-picker-icon" aria-hidden="true">↑</span>
+              <span class="stego-picker-copy"><strong id="stegoPickerName">Choose an image, video, recording, or file</strong><small>PNG and JPEG images use pixels; JPEG becomes PNG. Other files use appended data.</small></span>
+              <span class="stego-picker-action">Browse</span>
+            </label>
+            <input id="stegoCarrier" class="stego-native-picker" type="file" aria-describedby="stegoCarrierStatus">
+            <p id="stegoCarrierStatus" class="stego-detail" role="status" aria-live="polite" aria-atomic="true">No carrier selected. Capacity is calculated after you choose a file.</p>
+
+            <div class="stego-key-option">
+              <label for="stegoSeparateKey">
+                <input id="stegoSeparateKey" type="checkbox" aria-controls="stegoKeySetup">
+                <span><strong>Use a separate access key for this workspace</strong><small>Optional · off by default; otherwise the Access key above is used.</small></span>
+              </label>
+              <div id="stegoKeySetup" class="stego-key-setup" hidden>
+                <label for="stegoAccessKey">Media &amp; file payload access key</label>
+                <div class="row">
+                  <input type="password" id="stegoAccessKey" maxlength="4096" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Enter a separate access key">
+                  <button class="sq" type="button" id="stegoAccessKeyEye" aria-label="Show media access key" aria-pressed="false" title="Show media access key">Show</button>
+                </div>
+                <div class="passphrase-tools">
+                  <label for="stegoPassphraseLength">Required access-key length for new payload encryption</label>
+                  <div class="passphrase-actions">
+                    <select id="stegoPassphraseLength" aria-label="Required media access-key length for new payload encryption">
+                      <option value="16">16 characters</option>
+                      <option value="20">20 characters</option>
+                      <option value="24" selected>24 characters · Recommended</option>
+                      <option value="32">32 characters</option>
+                      <option value="40">40 characters</option>
+                      <option value="64">64 characters</option>
+                    </select>
+                    <button type="button" id="stegoGeneratePassphrase">Generate secure passphrase</button>
+                  </div>
+                </div>
+                <div class="key-strength">
+                  <div class="strength-heading">
+                    <label id="stegoKeyStrengthLabel" for="stegoKeyStrengthMeter">Access-key quality</label>
+                    <span id="stegoKeyStrengthStatus" class="key-strength-status" aria-live="polite">Add an access key to see an estimate.</span>
+                  </div>
+                  <progress id="stegoKeyStrengthMeter" class="strength-track" aria-labelledby="stegoKeyStrengthLabel" aria-valuetext="No estimate" max="100" value="0" data-level="empty">0%</progress>
+                  <p id="stegoKeyLengthStatus" class="key-length-status" role="status" aria-live="polite">Enter 24 characters for new payload encryption.</p>
+                  <p id="stegoKeyStrengthGuidance" class="key-strength-guidance">Use a long, unique passphrase. You can type one or generate it securely.</p>
+                  <ul class="key-checklist" aria-label="Media access-key guidance">
+                    <li id="stegoKeyCheck-length" data-label="Selected length" aria-label="Selected length: not met"><span class="check-icon" aria-hidden="true"></span><span>Exactly 24 characters</span></li>
+                    <li id="stegoKeyCheck-lowercase" data-label="Lowercase" aria-label="Lowercase: not met"><span class="check-icon" aria-hidden="true"></span><span>Lowercase</span></li>
+                    <li id="stegoKeyCheck-uppercase" data-label="Uppercase" aria-label="Uppercase: not met"><span class="check-icon" aria-hidden="true"></span><span>Uppercase</span></li>
+                    <li id="stegoKeyCheck-symbols" data-label="Symbols" aria-label="Symbols: not met"><span class="check-icon" aria-hidden="true"></span><span>Symbols (for example, ! @ #)</span></li>
+                    <li id="stegoKeyCheck-numbers" data-label="Numbers" aria-label="Numbers: not met"><span class="check-icon" aria-hidden="true"></span><span>Numbers</span></li>
+                  </ul>
+                  <span class="field-hint">This is a rough estimate, not a password audit. Character groups are guidance, not requirements; the selected length is enforced for new payload encryption. Keep this separate key to extract your payload later.</span>
+                </div>
+              </div>
+            </div>
+
+            <div id="stegoPayloadSection">
+              <div class="stego-section-label"><span>02</span> Payload</div>
+              <label class="stego-field-label" for="stegoText">Text message <span>Optional when selecting files</span></label>
+              <textarea id="stegoText" maxlength="4194304" rows="4" placeholder="Type the text you want to encrypt and conceal…"></textarea>
+              <div class="stego-payload-divider"><span>OR ADD A FILE COLLECTION</span></div>
+              <section id="stegoFilePicker" class="stego-file-picker" aria-labelledby="stegoFilePickerTitle">
+                <div class="stego-file-picker-copy">
+                  <span class="stego-file-picker-icon" aria-hidden="true">▤</span>
+                  <div>
+                    <h3 id="stegoFilePickerTitle">Files or folder</h3>
+                    <p>One file stays in its original format. Multiple files or a folder are bundled into a ZIP; extraction downloads the ZIP for you to open.</p>
+                  </div>
+                </div>
+                <div class="stego-file-picker-actions">
+                  <button type="button" id="stegoChooseFiles" class="stego-picker-button">Choose files</button>
+                  <button type="button" id="stegoChooseFolder" class="stego-picker-button stego-picker-button-secondary">Choose folder</button>
+                </div>
+                <p class="stego-drop-hint">Or drop files here · use Choose folder for a directory</p>
+                <input id="stegoFiles" class="stego-file-input" type="file" multiple aria-label="Choose one or more payload files">
+                <input id="stegoFolder" class="stego-file-input" type="file" webkitdirectory multiple aria-label="Choose a payload folder">
+                <div class="stego-file-selection">
+                  <p id="stegoFileSelectionSummary" aria-live="polite" aria-atomic="true">No files or folder added</p>
+                  <button type="button" id="stegoClearFiles" class="stego-clear-files" hidden>Clear selection</button>
+                </div>
+              </div>
+              <p id="stegoPayloadStatus" class="stego-detail" aria-live="polite">Add a text message or a file collection. Maximum payload size is 4 MiB.</p>
+            </div>
+
+            <div id="stegoExtractHint" class="stego-extract-hint" hidden>
+              Select the unchanged output carrier created by this tool and enter the same access key used to embed the payload.
+            </div>
+            <div class="stego-submit-row">
+              <button type="button" id="stegoHide" class="stego-primary-action" disabled>Encrypt and embed payload</button>
+              <button type="button" id="stegoExtract" class="stego-primary-action" hidden>Extract and decrypt payload</button>
+            </div>
+            <p class="field-hint" id="stegoStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+          </div>
+
+          <aside class="stego-side-column" aria-label="Image payload guidance">
+            <div class="stego-security-card">
+              <span class="stego-security-icon" aria-hidden="true">✓</span>
+              <div><strong>Encrypted before embedding</strong><p>Payloads use authenticated AES-256-GCM with the Access key above, or an optional separate workspace key.</p></div>
+            </div>
+            <div class="stego-capacity-card">
+              <div class="stego-capacity-heading"><span>Carrier capacity</span><span id="stegoCapacityValue">—</span></div>
+              <progress id="stegoCapacityBar" class="stego-capacity-track" max="4194304" value="0" aria-label="Carrier capacity relative to the 4 MiB payload limit"></progress>
+              <p>PNG capacity depends on opaque pixels. Other files have encrypted data appended, which is not concealed.</p>
+            </div>
+            <div class="stego-format-card">
+              <strong>Supported workflow</strong>
+              <ul>
+                <li>PNG image pixel embedding</li>
+                <li>JPEG input becomes PNG output</li>
+                <li>Video, audio, and other files use appended data</li>
+                <li>Single files stay in their original format</li>
+                <li>Folders and file collections recover as ZIP</li>
+                <li>Up to 4 MiB of payload data</li>
+              </ul>
+            </div>
+            <p class="stego-warning"><strong>Use a copy and keep the output unchanged.</strong> Editing or recompressing PNG can destroy embedded data. For video, audio, and other files, the encrypted block is appended—not concealed—and may affect compatibility.</p>
+          </aside>
+        </div>
+      </section>
       <section class="hash-tools" aria-labelledby="hash-title">
         <div class="panel-heading">
           <div><h2 id="hash-title">File hash &amp; integrity workbench</h2><p>Calculate local digests and verify published checksums.</p></div>
