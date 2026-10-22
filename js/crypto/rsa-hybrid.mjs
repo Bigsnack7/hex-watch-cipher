@@ -1,9 +1,12 @@
 import {
-  MAX_AES_CIPHERTEXT_BYTES, MAX_RSA_WRAPPED_BYTES, RSA_AES_TAG, RSA_DIRECT_TAG, RSA_TAG,
+  MAX_AES_CIPHERTEXT_BYTES, MAX_RSA_WRAPPED_BYTES, RSA_AES_TAG,
+  LEGACY_RSA_AES_V5_TAG, LEGACY_RSA_AES_V4_TAG, LEGACY_RSA_AES_TAG,
+  RSA_DIRECT_TAG, RSA_TAG, STRONG_KDF_ITERATIONS, KDF_ITERATIONS,
   assertMessageSize, b64, concat, decodeToken, decoder, encoder, requireCrypto, subtle
 } from './shared.mjs';
 import { readPem, writePem } from './pem.mjs';
 import { deriveAesKey } from './aes-gcm.mjs';
+import { deriveArgon2idKey, LEGACY_ARGON2ID_PARAMETERS } from './argon2id.mjs';
 
 async function decryptOrAuth(...args) {
   try {
@@ -33,7 +36,7 @@ async function importRsaKey(text, format, label, usage, extractable = false) {
   return key;
 }
 
-export async function generateRsaKeyPair({ exportable = false, modulusLength = 2048 } = {}) {
+export async function generateRsaKeyPair({ exportable = false, modulusLength = 3072 } = {}) {
   requireCrypto();
   if (![2048, 3072, 4096].includes(modulusLength)) throw new Error('keysize');
   const pair = await subtle.generateKey(
@@ -114,8 +117,14 @@ export async function encryptRsaThenAes(text, pem, password) {
   const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = new Uint8Array(await subtle.encrypt(
-    { name: 'AES-GCM', iv, additionalData: encoder.encode('RSA3:1') },
-    await deriveAesKey(password, salt, 256),
+    { name: 'AES-GCM', iv, additionalData: encoder.encode('RSA6:1') },
+    await subtle.importKey(
+      'raw',
+      await deriveArgon2idKey(password, salt),
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt']
+    ),
     rsaCiphertext
   ));
   return RSA_AES_TAG + b64(concat(new Uint8Array([1]), salt, iv, ciphertext));
@@ -123,7 +132,15 @@ export async function encryptRsaThenAes(text, pem, password) {
 
 export async function decryptRsaThenAes(token, pem, password) {
   requireCrypto();
-  const raw = decodeToken(token, RSA_AES_TAG, 1 + 16 + 12 + MAX_RSA_WRAPPED_BYTES + 16);
+  if (typeof token !== 'string') throw new Error('format');
+  const version6 = token.startsWith(RSA_AES_TAG);
+  const version5 = !version6 && token.startsWith(LEGACY_RSA_AES_V5_TAG);
+  const version4 = !version6 && !version5 && token.startsWith(LEGACY_RSA_AES_V4_TAG);
+  const formatTag = version6
+    ? RSA_AES_TAG
+    : version5 ? LEGACY_RSA_AES_V5_TAG
+      : version4 ? LEGACY_RSA_AES_V4_TAG : LEGACY_RSA_AES_TAG;
+  const raw = decodeToken(token, formatTag, 1 + 16 + 12 + MAX_RSA_WRAPPED_BYTES + 16);
   const headerLength = 1 + 16 + 12;
   if (raw.length < headerLength + 256 + 16 || raw[0] !== 1) throw new Error('format');
   // Validate the private key and the token size first: a malformed or wrong-size key is rejected
@@ -138,9 +155,26 @@ export async function decryptRsaThenAes(token, pem, password) {
     {
       name: 'AES-GCM',
       iv: raw.slice(17, 29),
-      additionalData: encoder.encode('RSA3:1')
+      additionalData: encoder.encode(
+        `${version6 ? 'RSA6' : version5 ? 'RSA5' : version4 ? 'RSA4' : 'RSA3'}:1`
+      )
     },
-    await deriveAesKey(password, raw.slice(1, 17), 256),
+    version6 || version5
+      ? await subtle.importKey(
+        'raw',
+        await deriveArgon2idKey(
+          password,
+          raw.slice(1, 17),
+          32,
+          version5 ? LEGACY_ARGON2ID_PARAMETERS : undefined
+        ),
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['decrypt']
+      )
+      : await deriveAesKey(
+        password, raw.slice(1, 17), 256, version4 ? STRONG_KDF_ITERATIONS : KDF_ITERATIONS
+      ),
     raw.slice(headerLength)
   );
   if (rsaCiphertext.byteLength !== privateKey.algorithm.modulusLength / 8) throw new Error('format');

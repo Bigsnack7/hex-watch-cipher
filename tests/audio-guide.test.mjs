@@ -10,10 +10,10 @@ import {
 
 const expectedModes = {
   aes: ['recommended choice', 'encrypted result', 'same access key'],
-  cbc: ['compatibility encryption option', 'CBC2', 'CBC1'],
+  cbc: ['compatibility encryption option', 'CBC5', 'CBC4', 'CBC3', 'CBC2', 'CBC1'],
   hybrid: ['recommended way to send', 'RSA1', 'private key'],
   'rsa-direct': ['short messages', 'RSA2', '190 bytes'],
-  'rsa-aes': ['short messages', 'RSA3', 'both'],
+  'rsa-aes': ['short messages', 'RSA6', 'both'],
   legacy: ['old method is not safe', 'old messages', 'unsafe']
 };
 
@@ -284,8 +284,8 @@ test('clicked controls speak guidance for the currently selected method', async 
 
     const rsaSizeSelect = elements.get('rsaKeySize');
     for (const [keyBits, limit, expected] of [
-      [2048, 190, /recommended default and usually offers a practical balance/],
-      [3072, 318, /3072 bits is larger than the default/],
+      [2048, 190, /smallest supported size and may offer broader compatibility/],
+      [3072, 318, /recommended default and provides a stronger margin/],
       [4096, 446, /4096 bits is the largest option/]
     ]) {
       rsaSizeSelect.value = String(keyBits);
@@ -347,7 +347,7 @@ test('clicked controls speak guidance for the currently selected method', async 
     rsaSizeSelect.value = '2048';
     await eventListeners.get(narrationButton).get('click')();
     eventListeners.get(rsaSizeSelect).get('change')();
-    assert.match(utterances.at(-1).text, /recommended default and usually offers a practical balance/);
+    assert.match(utterances.at(-1).text, /2048 bits is the smallest supported size.*lower security margin/);
     click('generateRsa', 'BUTTON');
     assert.match(utterances.at(-1).text, /makes a 2048-bit public key and private key/);
     controller.reset();

@@ -4,7 +4,12 @@ import {
 
 export const MAX_STEGO_PDF_BYTES = 32 * 1024 * 1024;
 export const MAX_STEGO_PDF_OUTPUT_BYTES = 64 * 1024 * 1024;
-export const STEGO_PDF_ATTACHMENT_NAME = 'hex-watch-cipher-payload.hwf2';
+export const STEGO_PDF_ATTACHMENT_NAME = 'hex-watch-cipher-payload.hwf5';
+const LEGACY_STEGO_PDF_ATTACHMENT_NAMES = new Set([
+  'hex-watch-cipher-payload.hwf4',
+  'hex-watch-cipher-payload.hwf3',
+  'hex-watch-cipher-payload.hwf2'
+]);
 
 const MAX_EMBEDDED_BYTES = 4 * 1024 * 1024 + 2048;
 const MAX_NAME_TREE_DEPTH = 32;
@@ -68,7 +73,9 @@ export async function attachEncryptedPayloadToPdf(pdfBytes, encryptedPayload) {
     throw new Error('stegoformat');
   }
   const document = await loadPdf(pdfBytes);
-  if (getAttachmentEntries(document).some(entry => entry.name === STEGO_PDF_ATTACHMENT_NAME)) {
+  if (getAttachmentEntries(document).some(entry =>
+    entry.name === STEGO_PDF_ATTACHMENT_NAME || LEGACY_STEGO_PDF_ATTACHMENT_NAMES.has(entry.name)
+  )) {
     throw new Error('pdfattachmentexists');
   }
   document.attach(encryptedPayload, STEGO_PDF_ATTACHMENT_NAME, {
@@ -129,7 +136,9 @@ async function decodeAttachmentStream(stream) {
 export async function extractEncryptedPayloadFromPdf(pdfBytes) {
   const document = await loadPdf(pdfBytes);
   const matches = getAttachmentEntries(document)
-    .filter(entry => entry.name === STEGO_PDF_ATTACHMENT_NAME);
+    .filter(entry =>
+      entry.name === STEGO_PDF_ATTACHMENT_NAME || LEGACY_STEGO_PDF_ATTACHMENT_NAMES.has(entry.name)
+    );
   if (matches.length !== 1) throw new Error('stegoformat');
 
   const embeddedFiles = matches[0].fileSpec.lookupMaybe(pdfName('EF'), PDFDict);

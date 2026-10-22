@@ -20,7 +20,7 @@ test('empty or non-string passphrases are rejected by the library', async () => 
   await assert.rejects(encryptAesGcm('x', ''), error => error.message === 'short');
   await assert.rejects(encryptCbcHmac('x', ''), error => error.message === 'short');
   await assert.rejects(encryptAesGcm('x', undefined), error => error.message === 'short');
-  assert.throws(() => encryptGrumpyV2('x', ''), error => error.message === 'short');
+  assert.throws(() => encryptGrumpyV2('x', ''), error => error.message === 'legacydisabled');
 });
 
 test('an over-long passphrase on decrypt reports keytoolarge instead of a fake auth failure', async () => {
@@ -51,14 +51,14 @@ test('ECDSA fingerprint reports a non-extractable public key as signingkeyformat
   await assert.rejects(fingerprintEcdsaPublicKey(locked), e => e.message === 'signingkeyformat');
 });
 
-test('RSA3 rejects a wrong-size or malformed private key before running PBKDF2', async () => {
-  const pair = await generateRsaKeyPair();
+test('RSA6 rejects a wrong-size or malformed private key before running Argon2id', async () => {
+  const pair = await generateRsaKeyPair({ modulusLength: 2048 });
   const larger = await generateRsaKeyPair({ modulusLength: 3072 });
   const token = await encryptRsaThenAes('hello', pair.publicKey, password);
   let started = performance.now();
   await assert.rejects(decryptRsaThenAes(token, 'garbage', password), e => e.message === 'keyformat');
   await assert.rejects(decryptRsaThenAes(token, larger.privateKey, password), e => e.message === 'format');
-  // Two PBKDF2 runs at 600k iterations would take hundreds of ms; the early checks must be far cheaper.
+  // Argon2id is deliberately expensive; malformed keys must be rejected before derivation.
   assert.ok(performance.now() - started < 250, 'early key checks should not derive a key');
   assert.equal(await decryptRsaThenAes(token, pair.privateKey, password), 'hello');
 });
