@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://aecfe6fc.hexwatch.pages.dev">
+  <a href="https://144a526b.hex-watch-cipher.pages.dev">
     <img src="https://img.shields.io/badge/🚀_Live_Demo-Try_Hex_Watch_Cipher-7C3AED?style=for-the-badge" alt="Try the live demo" />
   </a>
 </p>
