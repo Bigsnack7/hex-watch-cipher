@@ -31,26 +31,7 @@ function legacyStream(password) {
 }
 
 export function encryptGrumpyV2(text, password) {
-  assertMessageSize(text);
-  normalizeKey(password);
-  const next = legacyStream(password);
-  let result = '';
-  for (const character of text) {
-    const code = character.charCodeAt(0);
-    const upper = code >= 65 && code <= 90;
-    const lower = code >= 97 && code <= 122;
-    if (upper || lower) {
-      const index = code - (upper ? 65 : 97);
-      const shift = next();
-      const output = (FORWARD.charCodeAt(index) - 65 + shift) % 26 + 65;
-      result += String.fromCharCode(output + (upper ? 0 : 32));
-    } else if (code >= 48 && code <= 57) {
-      result += String.fromCharCode((code - 48 + 1) % 10 + 48);
-    } else {
-      result += character;
-    }
-  }
-  return result;
+  throw new Error('legacydisabled');
 }
 
 export function decryptGrumpyV2(text, password) {

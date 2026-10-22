@@ -1,13 +1,20 @@
 import {
-  AES_TAG, LEGACY_AES_TAG, CBC_TAG, CBC_LEGACY_TAG, RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG, MAX_MESSAGE_BYTES,
+  AES_TAG, LEGACY_AES_V4_TAG, LEGACY_AES_V3_TAG, LEGACY_AES_V2_TAG, LEGACY_AES_TAG,
+  CBC_TAG, LEGACY_CBC_V4_TAG, LEGACY_CBC_V3_TAG, LEGACY_CBC_V2_TAG, CBC_LEGACY_TAG,
+  RSA_TAG, RSA_DIRECT_TAG, RSA_AES_TAG, LEGACY_RSA_AES_V5_TAG,
+  LEGACY_RSA_AES_V4_TAG, LEGACY_RSA_AES_TAG,
+  MAX_MESSAGE_BYTES,
   MAX_SIGNED_MESSAGE_CHARS, generateEcdsaKeyPair, fingerprintEcdsaPublicKey,
   signMessageToken, verifyMessageToken, isSignedMessageToken,
   encryptAesGcm, decryptAesGcm, encryptCbcHmac, decryptCbcHmac,
   encryptRsaHybrid, decryptRsaHybrid, encryptRsaDirect, decryptRsaDirect,
   encryptRsaThenAes, decryptRsaThenAes,
   generateRsaKeyPair, fingerprintRsaPublicKey,
-  encryptGrumpyV2, decryptGrumpyV2,
-  MAX_FILE_BYTES, FILE_MAGIC, FILE_HEADER_BYTES, FILE_TAG_BYTES, FILE_CHUNK_BYTES, MAX_ENCRYPTED_FILE_BYTES,
+  decryptGrumpyV2,
+  MAX_FILE_BYTES, FILE_TAG, LEGACY_FILE_TAG, OLDEST_FILE_TAG,
+  FILE_MAGIC, LEGACY_FILE_V3_MAGIC, LEGACY_FILE_MAGIC,
+  LEGACY_FILE_V3_TAG, LEGACY_FILE_V4_MAGIC,
+  FILE_HEADER_BYTES, FILE_TAG_BYTES, FILE_CHUNK_BYTES, MAX_ENCRYPTED_FILE_BYTES,
   LEGACY_MAX_FILE_TOKEN_CHARS, encryptFileStream, decryptFileStream, decryptFileToken
 } from './crypto.mjs';
 import {
@@ -103,7 +110,7 @@ const MSG={auth:'Authentication failed. Check the access key or verify that the 
   keytoolarge:'Access keys cannot exceed 4,096 UTF-8 bytes.',
   toolarge:'Messages are limited to 100,000 UTF-8 bytes; encrypted tokens are limited to 140,000 characters and signed tokens to 200,000.',
   filetoolarge:'Files are limited to 1 GiB. Legacy HWF1 encrypted files are limited to 1 MiB.',
-  fileformat:'This file is not a supported HWF2 encrypted file.',
+  fileformat:'This file is not a supported encrypted file.',
   stegoformat:'This carrier does not contain a valid Hex Watch encrypted payload.',
   stegocapacity:'The encrypted payload does not fit in this PNG. Choose a larger PNG image or a smaller payload.',
   stegofile:'Choose exactly one payload source and keep the payload within the 4 MiB limit.',
@@ -486,12 +493,12 @@ function refresh(){
   const rsaKeyBits=Number($('rsaKeySize').value);
   const rsaMaxBytes=rsaKeyBits/8-66;
   const descriptions={
-    aes:[`Authenticated AES-${aesKeyBits}-GCM with PBKDF2-SHA-256. Each message gets a random salt and IV.`,`AES-${aesKeyBits}-GCM · PBKDF2-SHA-256 · 600,000 iterations · Tamper detection`],
-    cbc:['Compatibility option. AES-256-CBC uses a separate HMAC-SHA-256 key and verifies the authentication tag before decryption. Prefer AES-256-GCM for new messages.','AES-256-CBC with HMAC-SHA-256 · Encrypt-then-MAC · Compatibility'],
+    aes:[`Authenticated AES-${aesKeyBits}-GCM with Argon2id using 128 MiB of memory and 3 passes. Each message gets a random salt and IV.`,`AES-${aesKeyBits}-GCM · Argon2id · 128 MiB · 3 passes · Tamper detection`],
+    cbc:['Compatibility option. AES-256-CBC uses a separate HMAC-SHA-256 key and verifies the authentication tag before decryption. New CBC5 tokens use Argon2id with 128 MiB of memory and 3 passes. Prefer AES-256-GCM for new messages.','AES-256-CBC with HMAC-SHA-256 · Argon2id · 128 MiB · Compatibility'],
     'rsa-direct':[`Direct RSA-OAEP-SHA-256 encryption. With the selected generated RSA-${rsaKeyBits} key, messages are limited to ${rsaMaxBytes} UTF-8 bytes. Use AES-GCM + RSA-OAEP Hybrid for longer messages.`,`RSA-OAEP-SHA-256 · Direct encryption · ${rsaMaxBytes} UTF-8 bytes maximum with generated RSA-${rsaKeyBits}`],
-    'rsa-aes':[`RSA-OAEP-SHA-256 encrypts the short message first; passphrase-derived AES-256-GCM then wraps that RSA ciphertext. Both the matching private key and access key are required. With the selected generated RSA-${rsaKeyBits} key, the message limit is ${rsaMaxBytes} UTF-8 bytes; pasted public keys have their own limit. Uses RSA3 format.`,`RSA-OAEP → AES-256-GCM · Dual-key envelope · RSA3 format · ${rsaMaxBytes} UTF-8 bytes with generated RSA-${rsaKeyBits}`],
+    'rsa-aes':[`RSA-OAEP-SHA-256 encrypts the short message first; passphrase-derived AES-256-GCM then wraps that RSA ciphertext. Both the matching private key and access key are required. With the selected generated RSA-${rsaKeyBits} key, the message limit is ${rsaMaxBytes} UTF-8 bytes; pasted public keys have their own limit. New messages use RSA6 format; RSA5, RSA4, and RSA3 remain decryptable.`,`RSA-OAEP → AES-256-GCM · Dual-key envelope · RSA6 format · ${rsaMaxBytes} UTF-8 bytes with generated RSA-${rsaKeyBits}`],
     hybrid:['AES-256-GCM encrypts the message with a fresh random key; RSA-OAEP-SHA-256 wraps that key for the recipient. This standard hybrid method uses the RSA1 token format.','AES-256-GCM + RSA-OAEP-SHA-256 · Hybrid encryption · RSA1 format'],
-    legacy:['WARNING: Grumpy v2 encryption and decryption are available only for legacy compatibility and testing. It is cryptographically insecure, provides no reliable confidentiality or tamper detection, and must never protect sensitive data. Use AES-256-GCM instead.','Grumpy v2 · Legacy encryption/decryption · INSECURE']
+    legacy:['Grumpy v2 is an insecure legacy format available only to decrypt and migrate old messages. New encryption is disabled. Use AES-256-GCM instead.','Grumpy v2 · Legacy decryption only · INSECURE']
   };
   $('modeHint').textContent=descriptions[selected][0];
   $('rsaKeys').hidden=!hybridMode;
@@ -502,12 +509,12 @@ function refresh(){
     audio.announceSignatureEvent('unsupported');
   }
   $('keyHint').textContent=selected==='rsa-aes'
-    ?'RSA-first dual-key encryption uses this access key together with the recipient private key. New encryption requires exactly the selected access-key length; decryption does not. Maximum 4,096 UTF-8 bytes. The message is limited by the recipient RSA key size.'
+    ?'RSA-first dual-key encryption uses this access key together with the recipient private key. New encryption uses RSA6 with Argon2id (128 MiB, 3 passes); decryption also supports RSA5, RSA4, and RSA3. New encryption requires exactly the selected access-key length; decryption does not. Maximum 4,096 UTF-8 bytes. The message is limited by the recipient RSA key size.'
     :hybridMode
     ?'RSA text encryption does not use this access key. It remains available for AES-256-GCM file encryption, which requires exactly the selected length when encrypting. Maximum 4,096 UTF-8 bytes.'
     :selected==='legacy'
-    ?'WARNING: Grumpy v2 is cryptographically insecure and provides no reliable confidentiality or tamper detection. Use it only for legacy compatibility/testing, never sensitive messages. Enter a non-empty legacy key; this mode does not use AES/CBC NFKC normalization.'
-    :'Choose a long, unique passphrase; a randomly generated one is preferable to a short or predictable password. New password-based encryption requires exactly the selected length; decryption does not. AES/CBC normalize passphrases with Unicode NFKC before deriving keys. Maximum 4,096 UTF-8 bytes.';
+    ?'Grumpy v2 is cryptographically insecure and available only to decrypt and migrate old messages. New encryption is disabled. Enter the original non-empty legacy key; this mode does not use AES/CBC NFKC normalization.'
+    :'Choose a long, unique passphrase; a randomly generated one is preferable to a short or predictable password. New password-based encryption uses Argon2id (128 MiB, 3 passes) and requires exactly the selected length; decryption does not. AES/CBC normalize passphrases with Unicode NFKC before deriving keys. Maximum 4,096 UTF-8 bytes.';
   status.className='info'+(selected==='legacy'||!subtle?' warn':'');
   status.textContent=!subtle?MSG.nocrypto:descriptions[selected][1];
   $('signMessage').disabled=locked||operationBusy||selected==='legacy';
@@ -553,9 +560,14 @@ async function run(dec){
   if(!raw.trim())return show(EMPTY);
   if(raw.length>MAX_SIGNED_MESSAGE_CHARS){show(MSG.toolarge,true);audio.announceStatus('operationFailed');return}
   let value=raw.trim();
-  const isToken=isSignedMessageToken(value)||value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)||value.startsWith(CBC_LEGACY_TAG)||value.startsWith(RSA_TAG)||value.startsWith(RSA_DIRECT_TAG)||value.startsWith(RSA_AES_TAG);
+  const isToken=isSignedMessageToken(value)||value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_V4_TAG)||value.startsWith(LEGACY_AES_V3_TAG)||value.startsWith(LEGACY_AES_V2_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)||value.startsWith(LEGACY_CBC_V4_TAG)||value.startsWith(LEGACY_CBC_V3_TAG)||value.startsWith(LEGACY_CBC_V2_TAG)||value.startsWith(CBC_LEGACY_TAG)||value.startsWith(RSA_TAG)||value.startsWith(RSA_DIRECT_TAG)||value.startsWith(RSA_AES_TAG)||value.startsWith(LEGACY_RSA_AES_V5_TAG)||value.startsWith(LEGACY_RSA_AES_V4_TAG)||value.startsWith(LEGACY_RSA_AES_TAG);
   if((!dec||!isToken)&&new TextEncoder().encode(raw).length>MAX_MESSAGE_BYTES){
     show(MSG.toolarge,true);audio.announceStatus('operationFailed');return
+  }
+  if(!dec&&mode.value==='legacy'){
+    show('Grumpy v2 is insecure and is available only to decrypt and migrate existing messages.',true);
+    audio.announceStatus('operationFailed');
+    return;
   }
   if(dec&&isSignedMessageToken(value)&&!$('ecdsaPublicKey').value.trim()){
     show(MSG.signingpublic,true);$('ecdsaPublicKey').focus();audio.announceStatus('operationFailed');return;
@@ -584,9 +596,9 @@ async function run(dec){
       $('signatureStatus').textContent='Unsigned message. The sender’s identity has not been verified.';
     }
     if(dec){
-      if(value.startsWith(RSA_AES_TAG))mode.value='rsa-aes';
-      else if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG))mode.value='aes';
-      else if(value.startsWith(CBC_TAG)||value.startsWith(CBC_LEGACY_TAG))mode.value='cbc';
+      if(value.startsWith(RSA_AES_TAG)||value.startsWith(LEGACY_RSA_AES_V5_TAG)||value.startsWith(LEGACY_RSA_AES_V4_TAG)||value.startsWith(LEGACY_RSA_AES_TAG))mode.value='rsa-aes';
+      else if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_V4_TAG)||value.startsWith(LEGACY_AES_V3_TAG)||value.startsWith(LEGACY_AES_V2_TAG)||value.startsWith(LEGACY_AES_TAG))mode.value='aes';
+      else if(value.startsWith(CBC_TAG)||value.startsWith(LEGACY_CBC_V4_TAG)||value.startsWith(LEGACY_CBC_V3_TAG)||value.startsWith(LEGACY_CBC_V2_TAG)||value.startsWith(CBC_LEGACY_TAG))mode.value='cbc';
       else if(value.startsWith(RSA_TAG))mode.value='hybrid';
       else if(value.startsWith(RSA_DIRECT_TAG))mode.value='rsa-direct';
       refresh();
@@ -594,15 +606,15 @@ async function run(dec){
     const selected=mode.value;
     let r;
     if(dec){
-      if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)||value.startsWith(CBC_LEGACY_TAG)){
+      if(value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_V4_TAG)||value.startsWith(LEGACY_AES_V3_TAG)||value.startsWith(LEGACY_AES_V2_TAG)||value.startsWith(LEGACY_AES_TAG)||value.startsWith(CBC_TAG)||value.startsWith(LEGACY_CBC_V4_TAG)||value.startsWith(LEGACY_CBC_V3_TAG)||value.startsWith(LEGACY_CBC_V2_TAG)||value.startsWith(CBC_LEGACY_TAG)){
         if(!pw){show('Enter your access key to continue.',1);key.focus();audio.announceStatus('operationFailed');return}
-        r=value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_TAG)
+        r=value.startsWith(AES_TAG)||value.startsWith(LEGACY_AES_V4_TAG)||value.startsWith(LEGACY_AES_V3_TAG)||value.startsWith(LEGACY_AES_V2_TAG)||value.startsWith(LEGACY_AES_TAG)
           ?await decryptAesGcm(value,pw):await decryptCbcHmac(value,pw);
       }else if(value.startsWith(RSA_DIRECT_TAG)){
         const privateKey=rsaPrivateCryptoKey||rsaPrivate.value.trim();
         if(!privateKey){show(MSG.privatekey,1);rsaPrivate.focus();audio.announceStatus('operationFailed');return}
         r=await decryptRsaDirect(value,privateKey);
-      }else if(value.startsWith(RSA_AES_TAG)){
+      }else if(value.startsWith(RSA_AES_TAG)||value.startsWith(LEGACY_RSA_AES_V5_TAG)||value.startsWith(LEGACY_RSA_AES_V4_TAG)||value.startsWith(LEGACY_RSA_AES_TAG)){
         if(!pw){show('Enter the access key used to encrypt this message.',1);key.focus();audio.announceStatus('operationFailed');return}
         const privateKey=rsaPrivateCryptoKey||rsaPrivate.value.trim();
         if(!privateKey){show(MSG.privatekey,1);rsaPrivate.focus();audio.announceStatus('operationFailed');return}
@@ -615,9 +627,6 @@ async function run(dec){
         if(!pw){show('Enter your access key to continue.',1);key.focus();audio.announceStatus('operationFailed');return}
         r=decryptGrumpyV2(raw,pw);
       }else throw new Error('format');
-    }else if(selected==='legacy'){
-      if(!pw){show('Enter a legacy access key to continue.',true);key.focus();audio.announceStatus('operationFailed');return}
-      r=encryptGrumpyV2(raw,pw);
     }else if(selected==='rsa-direct'){
       if(!rsaPublic.value.trim()){show(MSG.publickey,1);rsaPublic.focus();audio.announceStatus('operationFailed');return}
       r=await encryptRsaDirect(raw,rsaPublic.value);
@@ -718,7 +727,7 @@ async function runFile(decrypting){
   }
   fileStatus.textContent='';
   fileStatus.classList.remove('error');
-  const suggestedName=decrypting?'decrypted-file.bin':'encrypted-file.hwf2';
+  const suggestedName=decrypting?'decrypted-file.bin':'encrypted-file.hwf5';
   const useSavePicker=typeof window.showSaveFilePicker==='function'&&file.size>=64*1024*1024;
   let pickerPromise=null;
   if(useSavePicker){
@@ -770,14 +779,17 @@ async function runFile(decrypting){
     }
     if(decrypting){
       const prefix=new TextDecoder().decode(await file.slice(0,5).arrayBuffer());
-      if(prefix==='HWF1.'){
+      if(prefix===FILE_TAG||prefix===LEGACY_FILE_V3_TAG||prefix===LEGACY_FILE_TAG||prefix===OLDEST_FILE_TAG){
         if(file.size>LEGACY_MAX_FILE_TOKEN_CHARS)throw new Error('filetoolarge');
         const plaintext=await decryptFileToken((await file.text()).trim(),password);
       if(locked||generation!==operationGeneration)throw new Error('cancelled');
         await writeOutputChunk(plaintext);
       }else{
         const magic=new Uint8Array(await file.slice(0,FILE_MAGIC.length).arrayBuffer());
-        if(!FILE_MAGIC.every((byte,index)=>magic[index]===byte))throw new Error('fileformat');
+        if(!FILE_MAGIC.every((byte,index)=>magic[index]===byte)&&
+           !LEGACY_FILE_V4_MAGIC.every((byte,index)=>magic[index]===byte)&&
+           !LEGACY_FILE_V3_MAGIC.every((byte,index)=>magic[index]===byte)&&
+           !LEGACY_FILE_MAGIC.every((byte,index)=>magic[index]===byte))throw new Error('fileformat');
         await decryptFileStream(file,password,async chunk=>{
           if(locked||generation!==operationGeneration)throw new Error('cancelled');
           if(chunk.length)await writeOutputChunk(chunk);
@@ -1759,7 +1771,7 @@ stegoDropzone.addEventListener('drop',event=>{
 mode.addEventListener('change',()=>{
   if(mode.value==='legacy'&&!legacyWarningAcknowledged){
     const accepted=window.confirm(
-      'Grumpy v2 is cryptographically insecure. It does not provide reliable confidentiality or tamper detection and must never protect sensitive information. Continue only for legacy compatibility or testing?'
+      'Grumpy v2 is cryptographically insecure and can only decrypt and migrate old messages. New encryption is disabled. Continue to legacy decryption?'
     );
     if(!accepted){
       mode.value=lastSelectedMode;

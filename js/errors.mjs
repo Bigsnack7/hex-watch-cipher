@@ -1,5 +1,5 @@
 const SAFE_ERROR_CODES = new Set([
-  'auth', 'decrypt', 'format', 'fileformat', 'fileio', 'filetoolarge',
+  'auth', 'decrypt', 'format', 'fileformat', 'fileio', 'filetoolarge', 'kdf',
   'keyformat', 'keylarge', 'keysize', 'keytoolarge', 'keyweak', 'nocrypto',
   'publickey', 'rsasizelimit', 'short', 'signature', 'signformat',
   'signing', 'signingkeyformat', 'signingkeymismatch', 'signingprivate',

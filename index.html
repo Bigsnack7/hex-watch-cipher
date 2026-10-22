@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self'; font-src 'self'; media-src 'none'; connect-src 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self'; font-src 'self'; media-src 'none'; connect-src 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="application-name" content="Hex Watch Cipher">
 <meta property="og:title" content="Hex Watch Cipher">
@@ -112,8 +112,8 @@
         <p class="field-hint" id="rsaKeyModeHint">The private key stays as a non-extractable CryptoKey in this page's memory. It is cleared on lock, page close, or reload and cannot be backed up by this app. If lost, messages encrypted to this key cannot be recovered.</p>
         <label for="rsaKeySize">RSA key size for generated keys</label>
         <select id="rsaKeySize">
-          <option value="2048" selected>2048 bits · Recommended</option>
-          <option value="3072">3072 bits</option>
+          <option value="2048">2048 bits</option>
+          <option value="3072" selected>3072 bits · Recommended</option>
           <option value="4096">4096 bits</option>
         </select>
         <span class="field-hint" id="rsaKeySizeHint">This applies only to keys generated here. Pasted or imported keys keep their own size. Keys smaller than 2048 bits are not supported.</span>
@@ -179,7 +179,7 @@
         </div>
         <label for="fileInput">File to encrypt or decrypt (up to 1 GiB)</label>
         <input id="fileInput" type="file" aria-describedby="fileHint">
-        <span class="field-hint" id="fileHint">Maximum 1 GiB. Files use chunked AES-256-GCM and the access key above. New encryption requires exactly the selected access-key length; decryption is not restricted by that setting. New encrypted files use the binary HWF2 format; earlier HWF1 files up to 1 MiB remain decryptable. Original filenames and types are not stored. Large files use a Save File picker where supported; other browsers may need substantial memory to prepare the download.</span>
+        <span class="field-hint" id="fileHint">Maximum 1 GiB. Files use chunked AES-256-GCM with Argon2id (128 MiB, 3 passes, one lane). New encryption requires exactly the selected access-key length; decryption is not restricted by that setting. New encrypted files use the binary HWF5 format; earlier HWF4, HWF3, HWF2, and HWF1 files remain decryptable. Original filenames and types are not stored. Large files use a Save File picker where supported; other browsers may need substantial memory to prepare the download.</span>
         <div class="key-action">
           <button type="button" id="fileEncrypt">Encrypt and download file</button>
           <button type="button" id="fileDecrypt">Decrypt and download file</button>

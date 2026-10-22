@@ -18,6 +18,7 @@ async function collectJavaScriptFiles(directory) {
 test('page uses same-origin scripts and styles with no inline executable blocks or style attributes', async () => {
   const html = await readFile(new URL('index.html', root), 'utf8');
   assert.match(html, /script-src 'self'/);
+  assert.match(html, /script-src 'self' 'wasm-unsafe-eval'/);
   assert.match(html, /script-src-attr 'none'/);
   assert.match(html, /style-src 'self'/);
   assert.match(html, /style-src-attr 'none'/);
@@ -100,7 +101,7 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(html, /<option value="hybrid">AES-GCM \+ RSA-OAEP · Hybrid \(Recommended\)<\/option>/);
   assert.doesNotMatch(html, /<option value="rsa">/);
   assert.match(html, /<option value="legacy">Grumpy v2 · Legacy only \(Insecure\)<\/option>/);
-  assert.match(html, /<select id="rsaKeySize">[\s\S]*?value="2048" selected>2048 bits · Recommended[\s\S]*?value="3072">3072 bits[\s\S]*?value="4096">4096 bits/);
+  assert.match(html, /<select id="rsaKeySize">[\s\S]*?value="2048">2048 bits[\s\S]*?value="3072" selected>3072 bits · Recommended[\s\S]*?value="4096">4096 bits/);
   assert.match(html, /id="rsaKeySizeHint">This applies only to keys generated here/);
   assert.match(html, /id="generateRsa">Generate selected-size RSA key pair/);
   assert.match(html, /id="signMessage"/);
@@ -172,13 +173,13 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(app, /generateRsaKeyPair\(\{exportable,modulusLength:Number\(\$\('rsaKeySize'\)\.value\)\}\)/);
   assert.match(app, /value\.startsWith\(RSA_DIRECT_TAG\)/);
   assert.match(app, /value\.startsWith\(RSA_AES_TAG\)/);
-  assert.match(app, /if\(value\.startsWith\(RSA_AES_TAG\)\)mode\.value='rsa-aes'/);
+  assert.match(app, /if\(value\.startsWith\(RSA_AES_TAG\)\|\|value\.startsWith\(LEGACY_RSA_AES_V5_TAG\)\|\|value\.startsWith\(LEGACY_RSA_AES_V4_TAG\)/);
   assert.match(app, /encryptRsaThenAes\(raw,rsaPublic\.value,pw\)/);
   assert.match(app, /decryptRsaThenAes\(value,privateKey,pw\)/);
   assert.match(app, /RSA1 token format/);
   assert.match(app, /audio\.setNarrationMode\(selected\)/);
-  assert.match(app, /value\.startsWith\(CBC_TAG\)\|\|value\.startsWith\(CBC_LEGACY_TAG\)/);
-  assert.match(app, /value\.startsWith\(AES_TAG\)\|\|value\.startsWith\(LEGACY_AES_TAG\)\|\|value\.startsWith\(CBC_TAG\)\|\|value\.startsWith\(CBC_LEGACY_TAG\)/);
+  assert.match(app, /value\.startsWith\(CBC_TAG\)\|\|value\.startsWith\(LEGACY_CBC_V4_TAG\)\|\|value\.startsWith\(LEGACY_CBC_V3_TAG\)/);
+  assert.match(app, /value\.startsWith\(AES_TAG\)\|\|value\.startsWith\(LEGACY_AES_V4_TAG\)\|\|value\.startsWith\(LEGACY_AES_V3_TAG\)/);
   assert.match(app, /audio\.announceStatus\(dec\?'messageDecrypted':'messageEncrypted'\)/);
   assert.match(app, /audio\.announceStatus\(decrypting\?'fileDecrypted':'fileEncrypted'\)/);
   assert.match(app, /audio\.announceStatus\('rsaKeyGenerated'\)/);
@@ -207,7 +208,7 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(app, /\$\('rsaKeySize'\)\.addEventListener\('change',\(\)=>\{invalidateMessageResult\(\);refresh\(\)\}\)/);
   assert.match(app, /inp\.addEventListener\('input',invalidateMessageResult\)/);
   assert.match(app, /\$\('key'\)\.addEventListener\('input',\(\)=>\{invalidateMessageResult\(\);updatePassphraseStrength\(\);updateActionButtons\(\)\}\)/);
-  assert.match(app, /else if\(selected==='legacy'\)\s*\{\s*if\(!pw\).*?r=encryptGrumpyV2\(raw,pw\);/s);
+  assert.doesNotMatch(app, /r=encryptGrumpyV2\(raw,pw\)/);
   assert.match(app, /if\(dec&&selected==='legacy'\)\s*\{\s*legacyMigrationText=r;/);
   assert.match(app, /function clearLegacyMigration\(\)\{\s*legacyMigrationText=null;\s*\$\('legacyMigration'\)\.hidden=true;\s*\$\('migrateLegacy'\)\.hidden=false;\s*\$\('migrationStatus'\)\.hidden=true;\s*\$\('migrationStatus'\)\.textContent='';\s*\}/);
   assert.match(app, /const migrated=legacyMigrationText;\s*mode\.value='aes';\s*key\.value='';\s*inp\.value=migrated;\s*invalidateMessageResult\(\);\s*refresh\(\);\s*updatePassphraseStrength\(\);\s*\$\('legacyMigration'\)\.hidden=false;\s*\$\('migrateLegacy'\)\.hidden=true;\s*\$\('migrationStatus'\)\.textContent=/);
@@ -222,7 +223,7 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(app, /computeFileHashes\(file,\[\.\.\.algorithms\]\)/);
   assert.match(app, /cancelHashWorker\(\)/);
   assert.match(app, /isHashFileSizeAllowed\(file\.size\)/);
-  assert.match(app, /Grumpy v2 is cryptographically insecure\.[\s\S]*Continue only for legacy compatibility or testing\?/);
+  assert.match(app, /if\(!dec&&mode\.value==='legacy'\)\{\s*show\('Grumpy v2 is insecure and is available only to decrypt and migrate existing messages\.'/);
   const legacySelection = app.match(/mode\.addEventListener\('change',\(\)=>\{([\s\S]*?)\n\}\);/)?.[1];
   assert.ok(legacySelection);
   assert.match(legacySelection, /if\(mode\.value==='legacy'&&!legacyWarningAcknowledged\)/);
@@ -252,6 +253,7 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(app, /inp\.addEventListener\('input',invalidateMessageResult\)/);
   const legacy = await readFile(new URL('js/crypto/legacy.mjs', root), 'utf8');
   assert.match(legacy, /export function encryptGrumpyV2/);
+  assert.match(legacy, /export function encryptGrumpyV2\(text, password\)\s*\{\s*throw new Error\('legacydisabled'\)/);
   assert.match(legacy, /export function decryptGrumpyV2/);
   const cryptoEntry = await readFile(new URL('js/crypto.mjs', root), 'utf8');
   assert.match(cryptoEntry, /export \{ encryptGrumpyV2, decryptGrumpyV2 \}/);
@@ -270,11 +272,21 @@ test('page uses same-origin scripts and styles with no inline executable blocks 
   assert.match(guide, /X-Frame-Options: DENY/);
   assert.match(guide, /inspect the actual response headers and Network panel/i);
   const fileCrypto = await readFile(new URL('js/crypto/file-aes-gcm.mjs', root), 'utf8');
-  assert.match(fileCrypto, /FILE_MAGIC = encoder\.encode\('HWF2'\)/);
+  assert.match(fileCrypto, /FILE_MAGIC = encoder\.encode\('HWF5'\)/);
   assert.match(fileCrypto, /MAX_FILE_BYTES = 1_073_741_824/);
   assert.match(fileCrypto, /FILE_CHUNK_BYTES = 4_194_304/);
   assert.match(fileCrypto, /export async function encryptFileStream/);
   assert.match(fileCrypto, /export async function decryptFileStream/);
+  const argonCore = await readFile(new URL('js/crypto/argon2id-core.mjs', root), 'utf8');
+  const argonWorker = await readFile(new URL('js/crypto/argon2-worker.mjs', root), 'utf8');
+  assert.match(argonCore, /ARGON2ID_MEMORY_KIB = 131_072/);
+  assert.match(argonCore, /ARGON2ID_ITERATIONS = 3/);
+  assert.match(argonWorker, /deriveArgon2idBytes/);
+  const argonVendor = await readFile(
+    new URL('js/vendor/hash-wasm-argon2.umd.min.js', root),
+    'utf8'
+  );
+  assert.match(argonVendor, /hash-wasm/);
   assert.match(app, /showSaveFilePicker/);
   assert.match(app, /MAX_ENCRYPTED_FILE_BYTES/);
 });

@@ -4,12 +4,12 @@ export const NARRATION_GUIDES = Object.freeze({
   aes: Object.freeze([
     'AES-256-GCM is the recommended choice for a new message protected by an access key. It scrambles the message and checks for changes. If the key is wrong or someone changes the encrypted message, the app will not open it.',
     'To protect a message, enter a long access key that you do not use anywhere else, type your message, and choose Encrypt message. Send the encrypted result and the access key separately. Anyone who gets both can read the message.',
-    'To read a protected message, paste the complete encrypted result into the message box, enter the same access key, and choose Decrypt message. Older CT1 messages are also supported. File encryption has its own controls and always uses AES-GCM.'
+    'To read a protected message, paste the complete encrypted result into the message box, enter the same access key, and choose Decrypt message. Older CT4, CT3, CT2, and CT1 messages are also supported. File encryption has its own controls and always uses AES-GCM.'
   ]),
   cbc: Object.freeze([
-    'This compatibility encryption option uses AES-CBC and a separate check to detect changes. New tokens use CBC2, and older CBC1 tokens can still be opened. For new messages, AES-GCM is the simpler recommended choice.',
+    'This compatibility encryption option uses AES-CBC and a separate check to detect changes. New tokens use CBC5 with Argon2id (128 MiB memory, 3 passes); older CBC4, CBC3, CBC2, and CBC1 tokens can still be opened. For new messages, AES-GCM is the simpler recommended choice.',
     'To protect a message, enter a long access key that you do not use anywhere else, type your message, and choose Encrypt message. Send the encrypted result and the access key separately. Anyone who gets both can read the message.',
-    'To read a protected message, paste the complete CBC2 or CBC1 result into the message box, enter the same access key, and choose Decrypt message. A wrong key or changed result will be rejected. File encryption always uses AES-GCM.'
+    'To read a protected message, paste the complete CBC5, CBC4, CBC3, CBC2, or CBC1 result into the message box, enter the same access key, and choose Decrypt message. A wrong key or changed result will be rejected. File encryption always uses AES-GCM.'
   ]),
   hybrid: Object.freeze([
     'This is the recommended way to send a message to someone without sharing an access key. The app scrambles the message with a new one-time key, then protects that key using the recipient’s public key.',
@@ -22,9 +22,9 @@ export const NARRATION_GUIDES = Object.freeze({
     'To read an RSA2 message, the recipient needs the matching private key and chooses Decrypt message. The access-key box is not used. For a longer message, choose the hybrid method.'
   ]),
   'rsa-aes': Object.freeze([
-    'This is an older, special format for short messages. It uses the recipient’s public key and a shared access key together. Both are needed to read the message, and the message still has a size limit. For most new messages, choose the hybrid method instead.',
-    'To protect a message, use the recipient’s public key, confirm its full fingerprint through a separate trusted way, enter the shared access key, and keep the message within the displayed limit. Send the encrypted RSA3 result and access key separately.',
-    'To read an RSA3 message, the recipient needs both the matching private key and the same access key. The message limit depends on the public key. For longer messages, choose the hybrid method.'
+    'This special dual-key format is for short messages. It uses the recipient’s public key and a shared access key together. Both are needed to read the message, and the message still has a size limit. For most new messages, choose the hybrid method instead.',
+    'To protect a message, use the recipient’s public key, confirm its full fingerprint through a separate trusted way, enter the shared access key, and keep the message within the displayed limit. Send the encrypted RSA6 result and access key separately.',
+    'To read an RSA6, RSA5, RSA4, or RSA3 message, the recipient needs both the matching private key and the same access key. The message limit depends on the public key. For longer messages, choose the hybrid method.'
   ]),
   legacy: Object.freeze([
     'This old method is not safe. It may fail to keep a message secret and cannot reliably show whether someone changed it. Use it only to open old messages or for testing. Never use it for private or important information.',
@@ -676,34 +676,34 @@ const LOCALIZED_GUIDES = Object.freeze({
 
 const RSA_AES_LOCALIZED_GUIDES = Object.freeze({
   yo: Object.freeze([
-    'Ọ̀nà RSA-OAEP àti AES-GCM yìí nílò kọ́kọ́rọ́ méjì, ó sì wà fún ọ̀rọ̀ kúkúrú. RSA-OAEP ló kọ́kọ́ fi ọ̀rọ̀ náà pamọ́; lẹ́yìn náà AES-256-GCM tó lo kọ́kọ́rọ́ ààbò rẹ ló bo àbájáde RSA. Ààmì rẹ̀ ni RSA3.',
-    'Láti fi pamọ́, lo kọ́kọ́rọ́ gbogbogbò ẹni tó máa gba ọ̀rọ̀ náà, ṣàyẹ̀wò àmì SHA-256 rẹ̀ ní ọ̀nà mìíràn tó ṣeé gbẹ́kẹ̀ lé, tẹ kọ́kọ́rọ́ ààbò tí ẹ pín, kí o sì tẹ ọ̀rọ̀ kúkúrú tó bá ìwọ̀n kọ́kọ́rọ́ RSA mu. Pín ààmì RSA3 àti kọ́kọ́rọ́ ààbò lọ́tọ̀.',
-    'Láti tú ààmì RSA3, lo kọ́kọ́rọ́ àṣírí RSA tó bá a mu àti kọ́kọ́rọ́ ààbò kan náà. A nílò méjèèjì. Ààlà ọ̀rọ̀ sinmi lórí ìwọ̀n kọ́kọ́rọ́ RSA; lo AES-GCM àti RSA-OAEP fún ọ̀rọ̀ tó gùn.'
+    'Ọ̀nà RSA-OAEP àti AES-GCM yìí nílò kọ́kọ́rọ́ méjì, ó sì wà fún ọ̀rọ̀ kúkúrú. RSA-OAEP ló kọ́kọ́ fi ọ̀rọ̀ náà pamọ́; lẹ́yìn náà AES-256-GCM tó lo kọ́kọ́rọ́ ààbò rẹ ló bo àbájáde RSA. Ààmì tuntun rẹ̀ ni RSA6.',
+    'Láti fi pamọ́, lo kọ́kọ́rọ́ gbogbogbò ẹni tó máa gba ọ̀rọ̀ náà, ṣàyẹ̀wò àmì SHA-256 rẹ̀ ní ọ̀nà mìíràn tó ṣeé gbẹ́kẹ̀ lé, tẹ kọ́kọ́rọ́ ààbò tí ẹ pín, kí o sì tẹ ọ̀rọ̀ kúkúrú tó bá ìwọ̀n kọ́kọ́rọ́ RSA mu. Pín ààmì RSA6 àti kọ́kọ́rọ́ ààbò lọ́tọ̀.',
+    'Láti tú ààmì RSA6, RSA5, RSA4 tàbí RSA3 àtijọ́, lo kọ́kọ́rọ́ àṣírí RSA tó bá a mu àti kọ́kọ́rọ́ ààbò kan náà. A nílò méjèèjì. Ààlà ọ̀rọ̀ sinmi lórí ìwọ̀n kọ́kọ́rọ́ RSA; lo AES-GCM àti RSA-OAEP fún ọ̀rọ̀ tó gùn.'
   ]),
   ig: Object.freeze([
-    'Usoro RSA-OAEP na AES-GCM a chọrọ igodo abụọ, ọ dịkwa mma naanị maka ozi dị mkpirikpi. RSA-OAEP na-ezochi ozi mbụ; AES-256-GCM nke paswọọdụ gị na-emesịa ezochi nsonaazụ RSA. Akara ya bụ RSA3.',
-    'Iji zoo ozi, jiri igodo ọha onye ga-enweta ya ma nyochaa akara SHA-256 n’ụzọ ọzọ a pụrụ ịtụkwasị obi. Tinye paswọọdụ unu kwekọrịtara na obere ozi dabara na nha igodo RSA. Ziga akara RSA3 na paswọọdụ iche iche.',
-    'Iji mepee akara RSA3, tinye igodo nzuzo RSA ziri ezi na otu paswọọdụ ahụ. A chọrọ ha abụọ. Oke ozi dabere na nha igodo RSA; jiri AES-GCM na RSA-OAEP maka ozi toro ogologo.'
+    'Usoro RSA-OAEP na AES-GCM a chọrọ igodo abụọ, ọ dịkwa mma naanị maka ozi dị mkpirikpi. RSA-OAEP na-ezochi ozi mbụ; AES-256-GCM nke paswọọdụ gị na-emesịa ezochi nsonaazụ RSA. Akara ọhụrụ ya bụ RSA6.',
+    'Iji zoo ozi, jiri igodo ọha onye ga-enweta ya ma nyochaa akara SHA-256 n’ụzọ ọzọ a pụrụ ịtụkwasị obi. Tinye paswọọdụ unu kwekọrịtara na obere ozi dabara na nha igodo RSA. Ziga akara RSA6 na paswọọdụ iche iche.',
+    'Iji mepee akara RSA6, RSA5, RSA4 ma ọ bụ RSA3 ochie, tinye igodo nzuzo RSA ziri ezi na otu paswọọdụ ahụ. A chọrọ ha abụọ. Oke ozi dabere na nha igodo RSA; jiri AES-GCM na RSA-OAEP maka ozi toro ogologo.'
   ]),
   ha: Object.freeze([
-    'Wannan hanyar RSA-OAEP da AES-GCM tana buƙatar maɓallai biyu kuma ta dace da gajerun saƙonni kawai. RSA-OAEP na ɓoye saƙon farko; AES-256-GCM da kalmar sirrinka ta samar daga baya yana ɓoye sakamakon RSA. Alamar ita ce RSA3.',
-    'Don ɓoyewa, yi amfani da maɓallin jama’a na mai karɓa kuma ka tabbatar da tambarin SHA-256 ta wata amintacciyar hanya. Shigar da kalmar sirrin da kuka amince da ita da gajeren saƙo da ya dace da girman RSA. A aika da alamar RSA3 da kalmar sirri dabam.',
-    'Don buɗe RSA3, shigar da maɓallin RSA na sirri da ya dace da kalmar sirrin da aka yi amfani da ita. Ana buƙatar su duka. Iyakar saƙo ta danganta da girman maɓallin RSA; yi amfani da AES-GCM da RSA-OAEP don saƙonni masu tsawo.'
+    'Wannan hanyar RSA-OAEP da AES-GCM tana buƙatar maɓallai biyu kuma ta dace da gajerun saƙonni kawai. RSA-OAEP na ɓoye saƙon farko; AES-256-GCM da kalmar sirrinka ta samar daga baya yana ɓoye sakamakon RSA. Sabuwar alamar ita ce RSA6.',
+    'Don ɓoyewa, yi amfani da maɓallin jama’a na mai karɓa kuma ka tabbatar da tambarin SHA-256 ta wata amintacciyar hanya. Shigar da kalmar sirrin da kuka amince da ita da gajeren saƙo da ya dace da girman RSA. A aika da alamar RSA6 da kalmar sirri dabam.',
+    'Don buɗe RSA6, RSA5, RSA4 ko tsohon RSA3, shigar da maɓallin RSA na sirri da ya dace da kalmar sirrin da aka yi amfani da ita. Ana buƙatar su duka. Iyakar saƙo ta danganta da girman maɓallin RSA; yi amfani da AES-GCM da RSA-OAEP don saƙonni masu tsawo.'
   ]),
   pcm: Object.freeze([
-    'Dis RSA-OAEP plus AES-GCM method need two keys, and e good for short messages only. RSA-OAEP hide di message first; AES-256-GCM wey your passphrase derive go hide di RSA result after. Di token na RSA3.',
-    'To encrypt, use di recipient public key and confirm di SHA-256 fingerprint through another trusted way. Put di shared access-key passphrase and short message wey fit di RSA key size. Send di RSA3 token and passphrase separately.',
-    'To decrypt RSA3, you need both di matching RSA private key and di same access-key passphrase. Di message limit depend on di RSA key size; use AES-GCM plus RSA-OAEP Hybrid for longer messages.'
+    'Dis RSA-OAEP plus AES-GCM method need two keys, and e good for short messages only. RSA-OAEP hide di message first; AES-256-GCM wey your passphrase derive go hide di RSA result after. New token na RSA6.',
+    'To encrypt, use di recipient public key and confirm di SHA-256 fingerprint through another trusted way. Put di shared access-key passphrase and short message wey fit di RSA key size. Send di RSA6 token and passphrase separately.',
+    'To decrypt RSA6, RSA5, RSA4, or old RSA3, you need both di matching RSA private key and di same access-key passphrase. Di message limit depend on di RSA key size; use AES-GCM plus RSA-OAEP Hybrid for longer messages.'
   ]),
   es: Object.freeze([
-    'Este método RSA-OAEP + AES-GCM requiere dos claves y solo sirve para mensajes cortos. RSA-OAEP cifra primero el mensaje; después, AES-256-GCM, derivado de tu frase de acceso, cifra el resultado RSA. El formato es RSA3.',
-    'Para cifrar, usa la clave pública del destinatario y verifica su huella SHA-256 por un canal de confianza independiente. Introduce la frase de acceso compartida y un mensaje dentro del límite de la clave RSA. Comparte el token RSA3 y la frase por separado.',
-    'Para descifrar RSA3 necesitas tanto la clave privada RSA correspondiente como la misma frase de acceso. El límite del mensaje depende del tamaño de la clave RSA; usa AES-GCM + RSA-OAEP Hybrid para mensajes más largos.'
+    'Este método RSA-OAEP + AES-GCM requiere dos claves y solo sirve para mensajes cortos. RSA-OAEP cifra primero el mensaje; después, AES-256-GCM, derivado de tu frase de acceso, cifra el resultado RSA. El formato nuevo es RSA6.',
+    'Para cifrar, usa la clave pública del destinatario y verifica su huella SHA-256 por un canal de confianza independiente. Introduce la frase de acceso compartida y un mensaje dentro del límite de la clave RSA. Comparte el token RSA6 y la frase por separado.',
+    'Para descifrar RSA6, RSA5, RSA4 o el formato anterior RSA3 necesitas tanto la clave privada RSA correspondiente como la misma frase de acceso. El límite del mensaje depende del tamaño de la clave RSA; usa AES-GCM + RSA-OAEP Hybrid para mensajes más largos.'
   ]),
   fr: Object.freeze([
-    'Cette méthode RSA-OAEP + AES-GCM nécessite deux clés et convient uniquement aux messages courts. RSA-OAEP chiffre d’abord le message ; AES-256-GCM, dérivé de votre phrase d’accès, chiffre ensuite le résultat RSA. Le format est RSA3.',
-    'Pour chiffrer, utilisez la clé publique du destinataire et vérifiez son empreinte SHA-256 par un canal indépendant fiable. Saisissez la phrase d’accès partagée et un message respectant la limite de la clé RSA. Partagez le jeton RSA3 et la phrase séparément.',
-    'Pour déchiffrer RSA3, il faut la clé privée RSA correspondante et la même phrase d’accès. La limite dépend de la taille de la clé RSA ; utilisez AES-GCM + RSA-OAEP Hybrid pour les messages plus longs.'
+    'Cette méthode RSA-OAEP + AES-GCM nécessite deux clés et convient uniquement aux messages courts. RSA-OAEP chiffre d’abord le message ; AES-256-GCM, dérivé de votre phrase d’accès, chiffre ensuite le résultat RSA. Le nouveau format est RSA6.',
+    'Pour chiffrer, utilisez la clé publique du destinataire et vérifiez son empreinte SHA-256 par un canal indépendant fiable. Saisissez la phrase d’accès partagée et un message respectant la limite de la clé RSA. Partagez le jeton RSA6 et la phrase séparément.',
+    'Pour déchiffrer RSA6, RSA5, RSA4 ou l’ancien format RSA3, il faut la clé privée RSA correspondante et la même phrase d’accès. La limite dépend de la taille de la clé RSA ; utilisez AES-GCM + RSA-OAEP Hybrid pour les messages plus longs.'
   ])
 });
 
@@ -832,17 +832,17 @@ function getControlNarration(id, language) {
 function getRsaKeySizeNarration(language, keyBits) {
   const maxBytes = keyBits / 8 - 66;
   const phrases = {
-    en: `RSA key size sets the size of a matched public and private key pair. The public key locks messages for its owner; only the matching private key unlocks them, so keep that private key safe. Larger RSA keys can take longer to create and use. ${keyBits === 2048
-      ? '2048 bits is the recommended default and usually offers a practical balance of speed and compatibility.'
-      : keyBits === 3072
-        ? '3072 bits is larger than the default and may take longer. Choose it when your security requirements call for it.'
-        : '4096 bits is the largest option and may take longest. Choose it when your security requirements call for it.'} This setting affects new key pairs only, not keys you paste or import. For direct RSA and RSA3, this size limits messages to ${maxBytes} bytes; some characters use several bytes. For longer messages, choose hybrid encryption: RSA protects a small one-time key, while AES protects the message. Keep the default unless you have a specific reason to change it. RSA and AES bit sizes measure different things, so do not compare their numbers directly.`,
-    yo: `Aṣàyàn ìwọ̀n kọ́kọ́rọ́ RSA. Àwọn kọ́kọ́rọ́ tuntun tí a ṣẹ̀dá níbí yóò jẹ́ RSA bítì ${keyBits}. RSA tààrà àti ìfiránṣẹ́ RSA3 nílò báítì UTF-8 tó pọ̀ jù ${maxBytes} fún ìwọ̀n yìí. Kọ́kọ́rọ́ tí a lẹ̀ mọ́ tàbí kó wọlé ní ìwọ̀n àti ààlà tirẹ̀. A kò gba kọ́kọ́rọ́ tó kéré sí bítì 2048.`,
-    ig: `Nhọrọ nha igodo RSA. Igodo ọhụrụ e mepụtara ebe a ga-eji RSA bit ${keyBits}. Ozi direct RSA na RSA3 nwere oke byte UTF-8 ${maxBytes} na nha a. Igodo e tinyere ma ọ bụ bubata nwere nha na oke nke ha. A naghị akwado igodo na-erughị bit 2048.`,
-    ha: `Zaɓin girman maɓallin RSA. Sabbin maɓallan da aka ƙirƙira a nan za su yi amfani da RSA mai bit ${keyBits}. Saƙonnin direct RSA da RSA3 suna da iyakar byte UTF-8 ${maxBytes} a wannan girman. Maɓallan da aka manna ko shigo da su suna da nasu girma da iyaka. Ba a tallafa wa ƙasa da bit 2048 ba.`,
-    pcm: `RSA key size option. New key pairs wey you generate here go use ${keyBits}-bit RSA. Direct RSA and RSA3 dual-key message fit get up to ${maxBytes} UTF-8 bytes for dis size. Pasted or imported keys get their own size and limit. We no support keys below 2048 bits.`,
-    es: `Selector del tamaño de clave RSA. Los pares nuevos generados aquí usarán RSA de ${keyBits} bits. Los mensajes RSA directos y RSA3 admiten hasta ${maxBytes} bytes UTF-8 con este tamaño. Las claves pegadas o importadas tienen su propio tamaño y límite. No se admiten claves inferiores a 2048 bits.`,
-    fr: `Sélecteur de taille de clé RSA. Les nouvelles paires générées ici utiliseront RSA ${keyBits} bits. Les messages RSA direct et RSA3 acceptent jusqu’à ${maxBytes} octets UTF-8 avec cette taille. Les clés collées ou importées ont leur propre taille et leur propre limite. Les clés de moins de 2048 bits ne sont pas prises en charge.`
+    en: `RSA key size sets the size of a matched public and private key pair. The public key locks messages for its owner; only the matching private key unlocks them, so keep that private key safe. Larger RSA keys can take longer to create and use. ${keyBits === 3072
+      ? '3072 bits is the recommended default and provides a stronger margin than 2048-bit keys.'
+      : keyBits === 2048
+        ? '2048 bits is the smallest supported size and may offer broader compatibility, but provides a lower security margin.'
+        : '4096 bits is the largest option and may take longest. Choose it when your security requirements call for it.'} This setting affects new key pairs only, not keys you paste or import. For direct RSA and RSA4, this size limits messages to ${maxBytes} bytes; some characters use several bytes. For longer messages, choose hybrid encryption: RSA protects a small one-time key, while AES protects the message. Keep the default unless you have a specific reason to change it. RSA and AES bit sizes measure different things, so do not compare their numbers directly.`,
+    yo: `Aṣàyàn ìwọ̀n kọ́kọ́rọ́ RSA. Àwọn kọ́kọ́rọ́ tuntun tí a ṣẹ̀dá níbí yóò jẹ́ RSA bítì ${keyBits}. RSA tààrà àti ìfiránṣẹ́ RSA4 nílò báítì UTF-8 tó pọ̀ jù ${maxBytes} fún ìwọ̀n yìí. Kọ́kọ́rọ́ tí a lẹ̀ mọ́ tàbí kó wọlé ní ìwọ̀n àti ààlà tirẹ̀. A kò gba kọ́kọ́rọ́ tó kéré sí bítì 2048.`,
+    ig: `Nhọrọ nha igodo RSA. Igodo ọhụrụ e mepụtara ebe a ga-eji RSA bit ${keyBits}. Ozi direct RSA na RSA4 nwere oke byte UTF-8 ${maxBytes} na nha a. Igodo e tinyere ma ọ bụ bubata nwere nha na oke nke ha. A naghị akwado igodo na-erughị bit 2048.`,
+    ha: `Zaɓin girman maɓallin RSA. Sabbin maɓallan da aka ƙirƙira a nan za su yi amfani da RSA mai bit ${keyBits}. Saƙonnin direct RSA da RSA4 suna da iyakar byte UTF-8 ${maxBytes} a wannan girman. Maɓallan da aka manna ko shigo da su suna da nasu girma da iyaka. Ba a tallafa wa ƙasa da bit 2048 ba.`,
+    pcm: `RSA key size option. New key pairs wey you generate here go use ${keyBits}-bit RSA. Direct RSA and RSA4 dual-key message fit get up to ${maxBytes} UTF-8 bytes for dis size. Pasted or imported keys get their own size and limit. We no support keys below 2048 bits.`,
+    es: `Selector del tamaño de clave RSA. Los pares nuevos generados aquí usarán RSA de ${keyBits} bits. Los mensajes RSA directos y RSA4 admiten hasta ${maxBytes} bytes UTF-8 con este tamaño. Las claves pegadas o importadas tienen su propio tamaño y límite. No se admiten claves inferiores a 2048 bits.`,
+    fr: `Sélecteur de taille de clé RSA. Les nouvelles paires générées ici utiliseront RSA ${keyBits} bits. Les messages RSA direct et RSA4 acceptent jusqu’à ${maxBytes} octets UTF-8 avec cette taille. Les clés collées ou importées ont leur propre taille et leur propre limite. Les clés de moins de 2048 bits ne sont pas prises en charge.`
   };
   return phrases[language] || phrases.en;
 }
