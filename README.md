@@ -288,6 +288,8 @@ Hex Watch Cipher is a static browser application. It does not require Node.js, a
 ### Requirements
 
 - A modern web browser with Web Crypto API support.
+- Designed for recent Android Chrome and iPhone/iPad Safari browsers; older browser versions may not support all cryptographic and file features.
+- Serve the app from HTTPS (or localhost) so browser cryptography and related APIs are available. Directly opening the files may not work.
 - Python for the simple local HTTP server.
 - The project's original directory structure.
 
@@ -306,8 +308,6 @@ http://localhost:8000/
 ```
 
 The application entry point is `index.html`.
-
-Web Crypto generally requires HTTPS or localhost. Directly opening the application through a `file://` URL may not work.
 
 ## Deployment
 

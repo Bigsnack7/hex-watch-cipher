@@ -1434,6 +1434,19 @@ button:disabled{border-color:#51455f;background:#171320;color:#a79bb8}
   .stego-key-advanced>summary small{margin-left:0;text-align:left}
   .stego-key-advanced-content .passphrase-actions{grid-template-columns:1fr}
 }
+@media(max-width:560px){
+  .card{
+    padding-right:max(14px,env(safe-area-inset-right));
+    padding-bottom:calc(24px + env(safe-area-inset-bottom));
+    padding-left:max(14px,env(safe-area-inset-left));
+  }
+}
+@media(max-width:900px),(pointer:coarse){
+  textarea,input,select{font-size:16px}
+  .card button,.card .hash-choose{min-height:44px}
+  .card .stego-key-advanced-content .passphrase-actions button{min-height:44px}
+  .hash-algorithms input,.signature-check input{width:20px;height:20px}
+}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}
 }
