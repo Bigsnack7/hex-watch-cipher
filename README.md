@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://144a526b.hex-watch-cipher.pages.dev">
+  <a href="https://b63c0625.hex-watch-cipher.pages.dev">
     <img src="https://img.shields.io/badge/🚀_Live_Demo-Try_Hex_Watch_Cipher-7C3AED?style=for-the-badge" alt="Try the live demo" />
   </a>
 </p>
@@ -51,7 +51,7 @@ The application performs its cryptographic operations locally in the browser wit
 - **Local runtime dependencies:** PDF support uses a bundled `pdf-lib` library rather than fetching a third-party library at runtime.
 - **Practical security engineering:** The project includes automated tests, input validation, error handling, key-management workflows, and privacy-conscious interface behavior.
 
-> **Live demo:** [Open Hex Watch Cipher](https://144a526b.hex-watch-cipher.pages.dev)
+> **Live demo:** [Open Hex Watch Cipher]((https://b63c0625.hex-watch-cipher.pages.dev))
 
 > **Security note:** This is a temporary Cloudflare Pages deployment. Use HTTPS on an origin you trust. Client-side encryption cannot protect secrets from compromised devices, malicious browser extensions, compromised application code, or a compromised hosting origin.
 
@@ -441,7 +441,7 @@ Review the [Security Model and Limitations](docs/PROJECT_GUIDE.md#security-model
 
 - GitHub: [Bigsnack7](https://github.com/Bigsnack7)
 - LinkedIn: [Oludemi Joshua](https://www.linkedin.com/in/oludemi-joshua-b6b59141b)
-- Live Demo: [Hex Watch Cipher](https://144a526b.hex-watch-cipher.pages.dev)
+- Live Demo: [Hex Watch Cipher](https://b63c0625.hex-watch-cipher.pages.dev)
 ---
 
 <p align="center">
